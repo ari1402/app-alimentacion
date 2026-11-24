@@ -1,0 +1,61 @@
+name: Publicar en GitHub Pages
+
+# Publica la app en https://<usuario>.github.io/<repo>/ en cada push a la rama principal.
+# Requisito (una sola vez): Settings → Pages → Source: "GitHub Actions".
+#
+# Variables opcionales (Settings → Secrets and variables → Actions → pestaña "Variables"):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_VAPID_PUBLIC_KEY
+# Son PÚBLICAS por diseño (terminan en el navegador). La API key de Claude NO va acá:
+# se carga desde la app (Ajustes → API key de Claude) y queda cifrada en Supabase.
+# Sin estas variables la app funciona en modo local (datos en el dispositivo, sin IA).
+
+on:
+  push:
+    branches: [main, claude/great-cerf-fisdea]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
+      - name: Verificar que el build no tenga secretos
+        run: |
+          if grep -rIl -E "sk-ant-api|SERVICE_ROLE|@anthropic-ai" dist; then echo "::error::El build contiene algo que parece un secreto"; exit 1; fi
+      # GitHub Pages no tiene rewrites: 404.html = index.html hace que /registrar, /coach, etc. funcionen al recargar
+      - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

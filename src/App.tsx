@@ -106,5 +106,5 @@ export default function App() {
 
   if (supabase && session === undefined) return <div className="app center"><span className="spinner" /></div>;
   if (supabase && !session) return <Login />;
-  return <BrowserRouter>{repo && <Loader repo={repo} />}</BrowserRouter>;
+  return <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>{repo && <Loader repo={repo} />}</BrowserRouter>;
 }

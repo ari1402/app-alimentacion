@@ -9,7 +9,10 @@ export default defineConfig(({ mode }) => {
   // loadEnv con prefijo "" lee TODAS las variables, pero solo las VITE_* se
   // inyectan al bundle. ANTHROPIC_API_KEY queda en el proceso de Node (dev).
   const env = loadEnv(mode, process.cwd(), "");
+  // BASE_PATH permite publicar en una subcarpeta (GitHub Pages: /app-alimentacion/)
+  const base = env.BASE_PATH || "/";
   return {
+    base,
     plugins: [react(), devApi(env)],
     resolve: {
       alias: {

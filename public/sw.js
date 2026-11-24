@@ -1,10 +1,13 @@
 // Service worker: offline básico + notificaciones push del coach.
-const VERSION = "v1";
+const VERSION = "v2";
+// Carpeta donde vive la app ("/" o "/app-alimentacion/" en GitHub Pages)
+const BASE = new URL("./", self.location).pathname;
+const withBase = (p) => BASE + String(p || "").replace(/^\//, "");
 const SHELL = `shell-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg"])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll([BASE, withBase("manifest.webmanifest"), withBase("icon.svg")])).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
@@ -19,17 +22,17 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return; // Supabase/IA: siempre red
+  if (url.origin !== self.location.origin || url.pathname.startsWith(withBase("api/"))) return; // Supabase/IA: siempre red
   if (req.mode === "navigate") {
     // Red primero; sin conexión, la app desde caché
     e.respondWith(
       fetch(req)
-        .then((res) => { caches.open(SHELL).then((c) => c.put("/", res.clone())); return res; })
-        .catch(() => caches.match("/")),
+        .then((res) => { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(BASE, copy)); return res; })
+        .catch(() => caches.match(BASE)),
     );
     return;
   }
-  if (url.pathname.startsWith("/assets/")) {
+  if (url.pathname.startsWith(withBase("assets/"))) {
     // Archivos con hash: caché primero
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
@@ -50,8 +53,8 @@ self.addEventListener("push", (e) => {
       body: data.body || "",
       tag: data.tag || "coach",
       renotify: true,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: withBase("icon-192.png"),
+      badge: withBase("icon-192.png"),
       data: { url: data.url || "/", eventId: data.eventId || null },
       actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
     }),
@@ -67,11 +70,11 @@ self.addEventListener("notificationclick", (e) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       for (const w of wins) {
         if ("focus" in w) {
-          w.postMessage({ type: "navigate", url: target });
+          w.postMessage({ type: "navigate", url: target }); // ruta interna: el router agrega la base
           return w.focus();
         }
       }
-      return self.clients.openWindow(target);
+      return self.clients.openWindow(withBase(target));
     }),
   );
 });

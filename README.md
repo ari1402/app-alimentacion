@@ -85,6 +85,14 @@ npm run dev
 
 Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan en el navegador (IndexedDB). La IA en local la sirve el servidor de Vite (`dev/devApi.ts`), que lee la key del proceso de Node — nunca llega al bundle.
 
+### Publicar en GitHub Pages (link público, gratis)
+
+1. En GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. **Actions → "Publicar en GitHub Pages" → Run workflow** (después se publica solo en cada push).
+3. Link: **https://ari1402.github.io/app-alimentacion/**
+
+Sin más configuración funciona en modo local (datos en el dispositivo, sin IA ni push). Para tener todo, seguí la opción 2 y cargá en **Settings → Secrets and variables → Actions → Variables** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_VAPID_PUBLIC_KEY` (públicas por diseño). La API key de Claude **no** va ahí: se carga desde la app.
+
 ### Opción 2 — producción (Supabase + push)
 
 1. **Crear el proyecto** en [supabase.com](https://supabase.com) e instalar el CLI (`npm i -g supabase`).
