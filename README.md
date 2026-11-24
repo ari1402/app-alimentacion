@@ -57,6 +57,15 @@ App personal (un solo usuario) que funciona como coach: registra comidas y entre
 - **Lista de compras:** elegís cuántas tandas de cada receta y arma la lista por categoría, con equivalencia a **crudo/seco** para comprar (ej. 900 g de pollo cocido ≈ 1,25 kg crudo). Se copia con un toque.
 - Registrar → Rápido muestra las recetas que mejor entran; el coach con IA también las conoce.
 
+### Apple Salud / Apple Watch (sueño, pasos, peso, FC en reposo)
+
+Apple no permite que una web app lea Salud. El puente es un **Atajo de iPhone** (instrucciones paso a paso en Ajustes → Apple Salud):
+- **Modo nube:** generás un token personal en Ajustes (se guarda solo su hash), el Atajo hace POST a la función `health-ingest` y una automatización lo corre solo cada mañana.
+- **Modo local:** el Atajo copia los datos y en la app tocás "Pegar datos de Salud" (o los escribís).
+- El parser acepta horas, minutos, segundos, tramos de sueño y números con formato argentino.
+
+Con el sueño, el coach se adapta: después de una noche corta (o de guardia) no aprieta y prioriza proteína, y la revisión semanal **no recorta calorías** si venís durmiendo menos de 6,5 h en promedio (Nedeltcheva 2010). El sueño también se puede cargar a mano junto al peso.
+
 ### Mejoras sobre el spec
 
 - **Foto y voz** para registrar en <15 s, además de texto.
@@ -131,6 +140,7 @@ Paso a paso manual (lo mismo que hace el script):
    supabase functions deploy api-key
    supabase functions deploy recipe
    supabase functions deploy parse-workout
+   supabase functions deploy health-ingest --no-verify-jwt
    supabase functions deploy coach-tick --no-verify-jwt
    ```
 6. **Cron del coach:** en Database → Extensions habilitá `pg_cron` y `pg_net`. Copiá `supabase/setup/cron.sql`, completá la URL de tu proyecto y el `CRON_SECRET`, y corrélo en el SQL Editor (los valores quedan cifrados en Vault, no en el repo).

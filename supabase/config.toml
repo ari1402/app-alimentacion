@@ -21,3 +21,7 @@ enable_confirmations = false
 # coach-tick lo llama pg_cron con un secreto propio (x-cron-secret), por eso sin verify_jwt.
 [functions.coach-tick]
 verify_jwt = false
+
+# El Atajo de iPhone se autentica con un token personal propio (no JWT).
+[functions.health-ingest]
+verify_jwt = false

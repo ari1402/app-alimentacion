@@ -84,6 +84,8 @@ export function morningMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
   const c = s.cfg;
   const parts: string[] = [`Objetivo: ${s.day.target.kcal} kcal y ≥${s.day.ranges.pMin} g de proteína${s.day.adjust.dietBreak ? " (pausa de mantenimiento)" : ""}.`];
   if (s.guardia) parts.push("Modo guardia: priorizá proteína cada 4–5 h, lo demás se acomoda.");
+  else if (s.sleep.veryShort) parts.push(`Dormiste ${s.sleep.lastNight} h: hoy el objetivo es el rango, no el mínimo. Proteína primero y nada de recortes extra; con poco sueño sube el hambre y cuesta más el músculo.`);
+  else if (s.sleep.short) parts.push(`Dormiste ${s.sleep.lastNight} h: hoy no hace falta apretar. Proteína en cada comida y si podés, una siesta corta.`);
   else if (s.workouts.isTrainingDay && !s.workouts.trainedToday) parts.push(`Hoy toca fuerza (${c.workout.time}). ${preWorkoutLine(s)}`);
   if (!s.day.slotsLogged.includes("desayuno")) {
     const o = bestOption(s, "desayuno");

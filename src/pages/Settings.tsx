@@ -8,6 +8,8 @@ import { supabase } from "../lib/supabase";
 import { disablePush, enablePush, pushState, type PushState, testPush } from "../lib/push";
 import { Sheet } from "../components/Sheet";
 import { deleteKey, keyStatus, type KeyStatus, saveKey } from "../lib/apiKey";
+import { createIngestToken, INGEST_URL, ingestStatus, parseHealthText, readClipboardHealth } from "../lib/health";
+import { uid } from "../lib/uid";
 import { ItemsEditor } from "../components/ItemsEditor";
 import { IconBack } from "../components/Icons";
 
@@ -157,6 +159,70 @@ function ApiKeyCard() {
           : "Modo local: queda guardada solo en este dispositivo (no en el código, no en GitHub, no en ningún servidor). La app le habla a Claude directo desde acá por HTTPS. Cargala en cada dispositivo que uses."}
         {" "}La sacás en console.anthropic.com → API Keys. Te conviene ponerle un límite de gasto mensual ahí.
       </p>
+    </div>
+  );
+}
+
+function HealthCard() {
+  const { repo, snap, actions, toast } = useStore();
+  const [token, setToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ configured: boolean; last_used_at: string | null } | null>(null);
+  const [manual, setManual] = useState("");
+  useEffect(() => { ingestStatus().then(setStatus).catch(() => {}); }, []);
+  const cloud = repo.mode === "cloud";
+  const apply = async (updates: ReturnType<typeof parseHealthText>) => {
+    if (!updates.length) return toast("No encontré datos (sueno, pasos_ayer, peso, fc_reposo).", "error");
+    for (const u of updates) await actions.saveMetric({ id: uid(), local_date: u.date, ...u.fields });
+    const label: Record<string, (v: number) => string> = {
+      sleep_h: (v) => `sueño ${String(v).replace(".", ",")} h`, weight_kg: (v) => `peso ${String(v).replace(".", ",")} kg`,
+      resting_hr: (v) => `FC reposo ${v}`, steps: (v) => `${v.toLocaleString("es-AR")} pasos`,
+    };
+    toast(`Importado: ${updates.map((u) => Object.entries(u.fields).map(([k, v]) => label[k]?.(v as number) ?? `${k} ${v}`).join(", ")).join(" · ")}`);
+  };
+  return (
+    <div className="card">
+      <h2>Apple Salud / Apple Watch</h2>
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Apple no deja que las web apps lean Salud directamente. El puente es un <strong>Atajo</strong> de iPhone que lee tu sueño, pasos, peso y
+        frecuencia cardíaca en reposo y se los pasa a la app {cloud ? "solo, todas las mañanas" : "con un toque"}.
+      </p>
+      {cloud && (
+        <>
+          {status?.configured && <p className="small">✓ Conectado{status.last_used_at ? ` · último envío ${new Date(status.last_used_at).toLocaleString("es-AR")}` : " · todavía no llegaron datos"}</p>}
+          <button className="btn sm" onClick={async () => { try { setToken(await createIngestToken()); setStatus({ configured: true, last_used_at: null }); } catch (e) { toast((e as Error).message, "error"); } }}>
+            {status?.configured ? "Generar token nuevo (invalida el anterior)" : "Generar token para el Atajo"}
+          </button>
+          {token && (
+            <div className="banner" style={{ marginTop: 8, wordBreak: "break-all" }}>
+              Copiá esto en el Atajo (se muestra una sola vez):<br />
+              <strong>URL:</strong> <span className="kbd">{INGEST_URL}</span><br />
+              <strong>Token:</strong> <span className="kbd">{token}</span>
+            </div>
+          )}
+        </>
+      )}
+      <details style={{ marginTop: 10 }}>
+        <summary className="small"><strong>Cómo armar el Atajo (5 min, una sola vez)</strong></summary>
+        <ol className="small muted" style={{ paddingLeft: 18 }}>
+          <li>App <strong>Atajos</strong> → <strong>+</strong> → nombre “Coach Salud”.</li>
+          <li><strong>Buscar muestras de Salud</strong>: tipo <em>Análisis del sueño</em>, fecha de inicio <em>en las últimas 16 horas</em>, valor <em>no es En cama</em> y <em>no es Despierto</em>. Después <strong>Obtener detalles de muestras de Salud → Duración</strong>.</li>
+          <li><strong>Buscar muestras de Salud</strong>: <em>Pasos</em>, fecha de inicio <em>en los últimos 1 días</em>. Después <strong>Calcular estadísticas → Suma</strong>.</li>
+          <li><strong>Buscar muestras de Salud</strong>: <em>Peso corporal</em>, más reciente primero, límite 1 (opcional, si usás balanza conectada).</li>
+          <li><strong>Buscar muestras de Salud</strong>: <em>Frecuencia cardíaca en reposo</em>, más reciente primero, límite 1 (opcional).</li>
+          {cloud ? (
+            <li><strong>Obtener contenido de URL</strong>: la URL de arriba, método <em>POST</em>, encabezado <em>Authorization</em> = <em>Bearer TU_TOKEN</em>, cuerpo <em>JSON</em> con los campos <span className="kbd">sueno</span>, <span className="kbd">pasos_ayer</span>, <span className="kbd">peso</span>, <span className="kbd">fc_reposo</span> (cada uno con la variable del paso correspondiente).</li>
+          ) : (
+            <li><strong>Diccionario</strong> con <span className="kbd">sueno</span>, <span className="kbd">pasos_ayer</span>, <span className="kbd">peso</span>, <span className="kbd">fc_reposo</span> → <strong>Copiar al portapapeles</strong>. Después abrí la app y tocá “Pegar datos de Salud”.</li>
+          )}
+          <li>{cloud ? <>Pestaña <strong>Automatización</strong> → <strong>Hora del día</strong> 9:00, diaria → <strong>Ejecutar inmediatamente</strong> → “Coach Salud”. Listo: llega solo cada mañana.</> : <>Opcional: automatización diaria a la mañana que ejecute el Atajo; al abrir la app pegás los datos.</>}</li>
+        </ol>
+        <p className="faint">Para el sueño necesitás el registro de sueño activado en el Apple Watch (app Salud → Sueño). Si el valor de sueño no te convence, probá cambiar el filtro de “Valor”: la app acepta horas, minutos, segundos o la lista de tramos y los suma.</p>
+      </details>
+      <div className="row wrap" style={{ marginTop: 10 }}>
+        <button className="btn sm" onClick={async () => { try { await apply(await readClipboardHealth(snap.today)); } catch (e) { toast((e as Error).message, "error"); } }}>Pegar datos de Salud</button>
+      </div>
+      <textarea style={{ marginTop: 8, minHeight: 56 }} placeholder={"o escribilos: sueno: 7,2\npasos_ayer: 8432\npeso: 82,1"} value={manual} onChange={(e) => setManual(e.target.value)} />
+      {manual.trim() && <button className="btn sm" style={{ marginTop: 6 }} onClick={async () => { await apply(parseHealthText(manual, snap.today)); setManual(""); }}>Importar texto</button>}
     </div>
   );
 }
@@ -382,6 +448,8 @@ export default function Settings() {
       </div>
 
       <ApiKeyCard />
+
+      <HealthCard />
 
       <div className="card">
         <h2>IA</h2>

@@ -132,6 +132,10 @@ export interface BodyMetric {
   thigh_cm?: number | null;
   /** Pasos del día (NEAT) */
   steps?: number | null;
+  /** Horas dormidas la noche que termina este día */
+  sleep_h?: number | null;
+  /** Frecuencia cardíaca en reposo (lpm) */
+  resting_hr?: number | null;
   note?: string | null;
 }
 

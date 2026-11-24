@@ -30,7 +30,7 @@ export async function loadCoachData(db: SupabaseClient, userId: string, tz: stri
   return {
     meals: (meals.data ?? []) as Meal[],
     workouts: (workouts.data ?? []) as Workout[],
-    metrics: (metrics.data ?? []).map((m) => ({ ...m, weight_kg: num(m.weight_kg), waist_cm: num(m.waist_cm), hip_cm: num(m.hip_cm), thigh_cm: num(m.thigh_cm), steps: num(m.steps) })) as BodyMetric[],
+    metrics: (metrics.data ?? []).map((m) => ({ ...m, weight_kg: num(m.weight_kg), waist_cm: num(m.waist_cm), hip_cm: num(m.hip_cm), thigh_cm: num(m.thigh_cm), steps: num(m.steps), sleep_h: num(m.sleep_h), resting_hr: num(m.resting_hr) })) as BodyMetric[],
     templates: (templates.data ?? []) as MealTemplate[],
     events: (events.data ?? []) as CoachEvent[],
   };

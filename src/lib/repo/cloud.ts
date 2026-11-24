@@ -52,7 +52,7 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
         templates: check(templates),
         meals: check(meals),
         workouts: check(workouts),
-        metrics: check(metrics).map((m) => ({ ...m, weight_kg: num(m.weight_kg), waist_cm: num(m.waist_cm), hip_cm: num(m.hip_cm), thigh_cm: num(m.thigh_cm), steps: num(m.steps) })),
+        metrics: check(metrics).map((m) => ({ ...m, weight_kg: num(m.weight_kg), waist_cm: num(m.waist_cm), hip_cm: num(m.hip_cm), thigh_cm: num(m.thigh_cm), steps: num(m.steps), sleep_h: num(m.sleep_h), resting_hr: num(m.resting_hr) })),
         events: check(events),
         portions: check(portions).map((p) => ({ ...p, grams: Number(p.grams) })),
         chat: check(chat).reverse(),
@@ -82,7 +82,7 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
       const { id: _id, ...rest } = m;
       const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null));
       const row = check(await sb.from("body_metrics").upsert({ ...fields, ...own }, { onConflict: "user_id,local_date" }).select("*").single());
-      return { ...row, weight_kg: num(row.weight_kg), waist_cm: num(row.waist_cm), hip_cm: num(row.hip_cm), thigh_cm: num(row.thigh_cm), steps: num(row.steps) } as BodyMetric;
+      return { ...row, weight_kg: num(row.weight_kg), waist_cm: num(row.waist_cm), hip_cm: num(row.hip_cm), thigh_cm: num(row.thigh_cm), steps: num(row.steps), sleep_h: num(row.sleep_h), resting_hr: num(row.resting_hr) } as BodyMetric;
     },
     async deleteMetric(id) { check(await sb.from("body_metrics").delete().eq("id", id)); },
     async savePortions(p) {

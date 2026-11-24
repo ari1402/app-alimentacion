@@ -10,12 +10,17 @@ import { uid } from "../lib/uid";
 export function WeightSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { snap, actions, toast, data } = useStore();
   const last = [...data.metrics].reverse().find((m) => m.weight_kg);
-  const [kg, setKg] = useState<string>(last?.weight_kg ? String(last.weight_kg) : "");
+  // Sin precargar: si no, guardar solo el sueño copiaría el peso viejo como el de hoy
+  const [kg, setKg] = useState<string>("");
+  const [sleep, setSleep] = useState<string>(snap.sleep.lastNight ? String(snap.sleep.lastNight) : "");
   const save = async () => {
     const v = Number(kg.replace(",", "."));
-    if (!v || v < 30 || v > 250) return toast("Peso inválido", "error");
-    await actions.saveMetric({ id: uid(), local_date: snap.today, weight_kg: v });
-    toast("Peso guardado. La proyección usa la tendencia, no el número de hoy.");
+    const sh = sleep ? Number(sleep.replace(",", ".")) : null;
+    if (kg && (!v || v < 30 || v > 250)) return toast("Peso inválido", "error");
+    if (sh != null && (!(sh >= 0) || sh > 16)) return toast("Horas de sueño inválidas", "error");
+    if (!kg && sh == null) return;
+    await actions.saveMetric({ id: uid(), local_date: snap.today, weight_kg: kg ? v : null, sleep_h: sh });
+    toast(kg ? "Guardado. La proyección usa la tendencia, no el número de hoy." : "Sueño guardado.");
     onClose();
   };
   return (
@@ -23,9 +28,11 @@ export function WeightSheet({ open, onClose }: { open: boolean; onClose: () => v
       <p className="faint" style={{ marginTop: 0 }}>Idealmente a la mañana, en ayunas, después del baño. El número de un día tiene ruido (agua, sodio, ciclo): mirá la tendencia.</p>
       {snap.cycle?.retention && <div className="banner" style={{ marginBottom: 8 }}>{snap.cycle.note}</div>}
       <div className="row">
-        <input type="number" inputMode="decimal" step="0.1" value={kg} onChange={(e) => setKg(e.target.value)} placeholder="kg" autoFocus aria-label="Peso en kg" />
+        <input type="number" inputMode="decimal" step="0.1" value={kg} onChange={(e) => setKg(e.target.value)} placeholder={last?.weight_kg ? `kg (último ${last.weight_kg})` : "kg"} autoFocus aria-label="Peso en kg" />
+        <input type="number" inputMode="decimal" step="0.5" value={sleep} onChange={(e) => setSleep(e.target.value)} placeholder="h de sueño" aria-label="Horas de sueño anoche" />
         <button className="btn primary" onClick={save}>Guardar</button>
       </div>
+      <p className="faint" style={{ marginBottom: 0 }}>Las horas de sueño son opcionales (o llegan solas desde Apple Salud, ver Ajustes).</p>
     </Sheet>
   );
 }
@@ -141,6 +148,14 @@ export default function Today() {
           <div>
             <div className="faint">Racha en rango</div>
             <div className="num" style={{ fontWeight: 650 }}>{snap.streak.current} días · {snap.streak.last14Pct}% (14 d)</div>
+          </div>
+          <div>
+            <div className="faint">Sueño</div>
+            <div className="num" style={{ fontWeight: 650 }}>{snap.sleep.lastNight != null ? `${String(snap.sleep.lastNight).replace(".", ",")} h anoche` : "—"}{snap.sleep.avg7 != null ? ` · ${String(snap.sleep.avg7).replace(".", ",")} prom.` : ""}</div>
+          </div>
+          <div>
+            <div className="faint">Pasos (7 días)</div>
+            <div className="num" style={{ fontWeight: 650 }}>{snap.steps.avg != null ? snap.steps.avg.toLocaleString("es-AR") : "—"}</div>
           </div>
           <div>
             <div className="faint">Tendencia</div>

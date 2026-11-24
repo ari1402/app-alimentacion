@@ -12,3 +12,4 @@ export * from "./portions.ts";
 export * from "./cardio.ts";
 export * from "./science.ts";
 export * from "./recipes.ts";
+export * from "./health.ts";

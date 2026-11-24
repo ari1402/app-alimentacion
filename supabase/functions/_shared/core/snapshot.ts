@@ -12,6 +12,7 @@ import {
   strengthCheck, type StrengthSignal, type TargetRecommendation, weeklySets,
 } from "./science.ts";
 import { weeksInDeficit } from "./cardio.ts";
+import { type SleepStats, sleepStats } from "./health.ts";
 
 export interface CoachData {
   meals: Meal[]; // idealmente últimos ~60 días
@@ -47,6 +48,7 @@ export interface Snapshot {
   cycle: CyclePhase | null;
   steps: { avg: number | null; n: number };
   weeksInDeficit: number;
+  sleep: SleepStats;
 }
 
 export function isGuardia(cfg: UserConfig, now: Date): boolean {
@@ -80,13 +82,14 @@ export function buildSnapshot(cfg: UserConfig, data: CoachData, now: Date = new 
     lastMeasureDate: measures.length ? measures[measures.length - 1] : null,
     guardia: isGuardia(cfg, now),
     adaptive: computeAdaptive(cfg, data.meals, data.events, today),
-    targetRec: recommendTargets(cfg, projection, data.meals, data.workouts, today),
+    targetRec: recommendTargets(cfg, projection, data.meals, data.workouts, today, data.metrics),
     evidence: evidenceReview(cfg, weightKg, projection.tdee.kcal),
     strength: strengthCheck(data.workouts, today),
     volume: weeklySets(data.workouts, today),
     cycle: cyclePhase(cfg, today),
     steps: stepsAverage(data.metrics, today),
     weeksInDeficit: weeksInDeficit(cfg, today),
+    sleep: sleepStats(data.metrics, today),
   };
 }
 
@@ -120,6 +123,7 @@ export function snapshotForAI(s: Snapshot): string {
     s.strength.signals.length ? `Fuerza (1RM est., últimas 2 sem vs 8 previas): ${s.strength.signals.map((x) => `${x.exercise} ${x.changePct > 0 ? "+" : ""}${x.changePct}%`).join(", ")}.` : "",
     s.volume.length ? `Series últimos 7 días por grupo: ${s.volume.map((v) => `${v.muscle} ${v.sets}`).join(", ")}.` : "",
     s.steps.avg != null ? `Pasos promedio 7 días: ${s.steps.avg} (objetivo ${c.steps_goal}).` : "",
+    s.sleep.lastNight != null || s.sleep.avg7 != null ? `Sueño: anoche ${s.sleep.lastNight ?? "?"} h, promedio 7 días ${s.sleep.avg7 ?? "?"} h (${s.sleep.nights7} noches).${s.sleep.short ? " Durmió poco: no proponer recortes hoy, priorizar proteína, puede tener más hambre." : ""}` : "",
     s.cycle ? `Ciclo: día ${s.cycle.day}, fase ${s.cycle.phase}${s.cycle.retention ? " (retención de agua probable)" : ""}.` : "",
     `Chequeo de evidencia: ${s.evidence.filter((e) => !e.ok).map((e) => `${e.label} fuera de guía (${e.value}; guía ${e.guide})`).join("; ") || "todo dentro de las guías"}.`,
   ];

@@ -26,6 +26,7 @@ import { bestSet, normalizeExercise } from "./workouts.ts";
 import { daySummaries } from "./week.ts";
 import { type Projection, SAFETY_FLOOR_KCAL } from "./weight.ts";
 import { weeksInDeficit } from "./cardio.ts";
+import { sleepStats } from "./health.ts";
 
 // ─────────────────────────── Fuerza: ¿se mantiene? ───────────────────────────
 
@@ -183,7 +184,11 @@ export function recommendTargets(
   meals: Meal[],
   workouts: Workout[],
   today: string,
+  metrics: BodyMetric[] = [],
 ): TargetRecommendation {
+  const sleep = sleepStats(metrics, today);
+  // Dormir < 6.5 h en promedio aumenta la pérdida de músculo en déficit (Nedeltcheva 2010)
+  const shortSleep = sleep.avg7 != null && sleep.nights7 >= 4 && sleep.avg7 < 6.5;
   const w = p.currentTrend ?? cfg.goal.start_kg;
   const ideal: [number, number] = [Math.round(w * 0.005 * 100) / 100, Math.round(w * 0.01 * 100) / 100];
   const base: TargetRecommendation = { action: "mantener", deltaKcal: 0, newTargets: null, title: "", reasons: [], alternatives: [], ratePctWeek: null, idealKgWeek: ideal, dietBreakSuggested: false };
@@ -229,6 +234,7 @@ export function recommendTargets(
       reasons: [
         `Ritmo: ${pct.toFixed(2)} %/sem (${rate.toFixed(2)} kg). Lo que mejor preserva músculo y fuerza es 0.5–1 %/sem (Garthe 2011).`,
         ...(strengthDrop ? [`La fuerza viene bajando: ${strength.dropping.map((s) => `${s.exercise} ${s.changePct}%`).join(", ")}. Señal de déficit demasiado agresivo.`] : []),
+        ...(shortSleep ? [`Además dormís ${sleep.avg7} h en promedio: más razón para no apretar el déficit.`] : []),
         "Las kcal extra van a carbos (mejor rendimiento en el entreno); la proteína queda igual.",
       ],
       alternatives: breakAlt, dietBreakSuggested: dietBreakDue,
@@ -239,6 +245,17 @@ export function recommendTargets(
       ...base, action: "consistencia", title: "Mantener: el foco es sostener el plan actual",
       reasons: [`${Math.round(adherence * 100)}% de los días registrados estuvieron en rango o cerca. Antes de recortar, conviene que el plan actual sea sostenible: bajar más las calorías suele empeorar la adherencia.`],
       alternatives: ["Elegí UN cambio para la semana (ej. proteína en el desayuno o la cena de plantilla). El paso más chico que puedas sostener.", ...breakAlt],
+      dietBreakSuggested: dietBreakDue,
+    };
+  }
+  if (pct < 0.35 && shortSleep) {
+    return {
+      ...base, action: "mantener", title: "Mantener: primero el sueño",
+      reasons: [
+        `Ritmo: ${pct.toFixed(2)} %/sem, pero venís durmiendo ${sleep.avg7} h en promedio. Con poco sueño, recortar calorías aumenta la pérdida de músculo y el hambre (Nedeltcheva 2010).`,
+        "Antes de bajar calorías: sumar pasos y cuidar el descanso cuando se pueda.",
+      ],
+      alternatives: ["Sumar ~2.000 pasos/día (≈ 80–100 kcal).", ...breakAlt],
       dietBreakSuggested: dietBreakDue,
     };
   }
