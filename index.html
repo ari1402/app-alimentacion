@@ -18,6 +18,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Si la app no arranca (por ej. GitHub Pages sirviendo el código sin compilar), explicar qué hacer en vez de dejar la pantalla en blanco -->
+    <div id="boot-fail" hidden style="font: 16px/1.5 system-ui, sans-serif; max-width: 520px; margin: 15vh auto; padding: 0 16px; color: #52514e">
+      <h1 style="font-size: 20px; color: #0b0b0b">La app no cargó</h1>
+      <p>Recargá la página. Si estás viendo esto en GitHub Pages, revisá en el repositorio:
+        <strong>Settings → Pages → Build and deployment → Source: “GitHub Actions”</strong>,
+        y después <strong>Actions → “Publicar en GitHub Pages” → Run workflow</strong>.</p>
+    </div>
+    <script>
+      setTimeout(function () {
+        var r = document.getElementById("root");
+        if (r && !r.hasChildNodes()) document.getElementById("boot-fail").hidden = false;
+      }, 6000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
