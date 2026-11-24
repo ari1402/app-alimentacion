@@ -18,7 +18,7 @@ function Simulator() {
   const [carbs, setCarbs] = useState("35");
   const n = negotiateExtra(
     { kcal: Number(kcal) || 0, p: 0, c: Number(carbs) || 0, f: Math.max(0, ((Number(kcal) || 0) - (Number(carbs) || 0) * 4) / 9) },
-    data.meals, data.config, snap.today, snap.projection.tdee.kcal,
+    data.meals, data.config, snap.today, snap.projection.tdee.kcal, data.workouts,
   );
   const wk = simulateWorkoutChange(data.config, data.workouts, snap.today, "mover");
   const sk = simulateWorkoutChange(data.config, data.workouts, snap.today, "saltear");

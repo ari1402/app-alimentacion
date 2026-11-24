@@ -25,6 +25,30 @@ App personal (un solo usuario) que funciona como coach: registra comidas y entre
 | v3 adaptativo | ✅ | Mueve recordatorios a tu horario real, baja la frecuencia de avisos que ignorás, deja de insistir con comidas que no hacés. Te muestra qué ajustó y por qué. |
 | v3 reintroducciones | ✅ | Registro de intentos (merluza, pollo disimulado) con puntaje 1–5. |
 
+### Ajuste del objetivo y base científica
+
+**Cardio → objetivo del día (automático).** Al registrar cardio (modalidad, minutos, intensidad y, opcionalmente, frecuencia cardíaca o las kcal del reloj) la app estima las **kcal netas** y suma una parte al objetivo de ese día:
+- Gasto con METs del *Compendium of Physical Activities* (Ainsworth 2011/2024), **netos del reposo** (el basal ya está en tu plan; sumarlo de nuevo duplicaría kcal).
+- Con FC usa la ecuación de Keytel 2005; las kcal del reloj se descuentan un 20% (los wearables sobreestiman, Shcherbina 2017) y se promedian con la estimación MET.
+- Se suma el **50%** por defecto (configurable 0–100%, con tope diario): las estimaciones tienen error y el cuerpo compensa parte del gasto (Pontzer 2016). Las kcal extra van a carbos (75%) y grasas (25%); la proteína no cambia.
+- La fuerza no suma: el plan base ya asume 3–4 sesiones. El objetivo de 3–4 sesiones semanales cuenta solo fuerza.
+
+**Revisión semanal del objetivo (propuesta, vos la aplicás con un botón).** Cada semana evalúa, en este orden:
+1. ¿Hay datos? (4+ pesos en 3 semanas; si no, los pide).
+2. ¿Se sostuvo el plan? Con menos de 9 días registrados o menos de 65% de adherencia **no recorta**: el foco es la consistencia.
+3. ¿El ritmo está en **0.5–1 % del peso por semana**? (Garthe 2011; Helms 2014). Si es más rápido, o la fuerza cae más de 7%, propone **+100–150 kcal**. Si está estancada con buena adherencia, propone **−100–150 kcal** o, como alternativa, más pasos o cardio de bajo impacto.
+4. Nunca baja de 1500 kcal, nunca toca la proteína y espera ≥2 semanas entre ajustes.
+5. Después de 12+ semanas en déficit ofrece una **pausa de mantenimiento** de 2 semanas (MATADOR, Byrne 2018).
+
+**Chequeos con evidencia (Ajustes → Base científica):**
+- Proteína en g/kg (1.6–2.2; Morton 2018) y reparto por comida (0.3–0.4 g/kg; Schoenfeld & Aragon 2018).
+- Grasas ≥ 20% de las kcal, ritmo implícito del plan, piso calórico y pasos (Paluch 2022).
+- En Entrenos: series semanales por grupo muscular (≥10 para progresar; Schoenfeld 2017) y si la **fuerza se mantiene** (1RM estimado, últimas 2 semanas vs las 8 anteriores).
+- **Ciclo** opcional: en fase con retención explica que la suba de la balanza es agua.
+- **Pasos diarios** (NEAT) como primera palanca antes de recortar comida.
+- Proteína de digestión lenta antes de dormir cuando falta (Res 2012).
+- El coach con IA tiene este marco de evidencia en su prompt y herramientas para simular cardio, revisar el objetivo y hacer el chequeo científico.
+
 ### Mejoras sobre el spec
 
 - **Foto y voz** para registrar en <15 s, además de texto.
@@ -67,7 +91,7 @@ Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan
 2. **Base de datos:**
    ```bash
    supabase link --project-ref <tu-ref>
-   supabase db push                 # aplica supabase/migrations (tablas + RLS)
+   supabase db push                 # aplica supabase/migrations (tablas + RLS + cardio/pasos)
    ```
 3. **Claves VAPID** (push): `npm run vapid` y guardá lo que imprime (no se escribe a disco).
 4. **Secretos de las funciones** (acá va la API key):

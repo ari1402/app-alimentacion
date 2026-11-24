@@ -209,6 +209,51 @@ export default function Settings() {
       </div>
 
       <div className="card">
+        <h2>Base científica</h2>
+        <p className="faint" style={{ marginTop: 0 }}>Tus objetivos contra la evidencia (con tu peso de tendencia y gasto estimado actuales).</p>
+        {snap.evidence.map((e) => (
+          <div key={e.key} className="list-item small" style={{ alignItems: "flex-start" }}>
+            <span style={{ width: 18 }}>{e.ok ? "✓" : "⚠"}</span>
+            <div className="grow">
+              <div><strong>{e.label}:</strong> {e.value}</div>
+              <div className="faint">Guía: {e.guide} · {e.source}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <h2>Cardio y ajuste automático</h2>
+        <label className="field"><span>Del gasto neto del cardio, cuánto se suma al objetivo del día</span>
+          <div className="seg">
+            {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+              <button key={v} className={cfg.cardio.eatback === v ? "on" : ""} onClick={() => set("cardio", { ...cfg.cardio, eatback: v })}>{v * 100}%</button>
+            ))}
+          </div>
+        </label>
+        <p className="faint">50% recomendado: las estimaciones (y los relojes) sobreestiman el gasto y el cuerpo compensa una parte. 0% = el cardio suma todo al déficit.</p>
+        <div className="grid2">
+          <Num label="Tope por día (kcal)" value={cfg.cardio.max_bonus} onChange={(v) => set("cardio", { ...cfg.cardio, max_bonus: v })} />
+          <Num label="Pasos objetivo" value={cfg.steps_goal} step={500} onChange={(v) => set("steps_goal", v)} />
+        </div>
+        <label className="row small" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={cfg.auto_adjust.enabled} onChange={(e) => set("auto_adjust", { ...cfg.auto_adjust, enabled: e.target.checked })} />
+          Revisión semanal del objetivo (te propone subir/bajar 100–150 kcal según tu ritmo real; vos lo aplicás)
+        </label>
+        <label className="row small" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={cfg.cycle.enabled} onChange={(e) => set("cycle", { ...cfg.cycle, enabled: e.target.checked })} />
+          Registrar ciclo (para interpretar subidas de agua en la balanza)
+        </label>
+        {cfg.cycle.enabled && <div style={{ marginTop: 8 }}><Num label="Duración del ciclo (días)" value={cfg.cycle.length} onChange={(v) => set("cycle", { ...cfg.cycle, length: v })} /></div>}
+        {cfg.target_history.length > 0 && (
+          <details style={{ marginTop: 10 }}>
+            <summary className="faint">Historial de ajustes ({cfg.target_history.length})</summary>
+            {[...cfg.target_history].reverse().map((h, i) => <div key={i} className="small faint">{h.date}: {h.kcal} kcal — {h.reason}</div>)}
+          </details>
+        )}
+      </div>
+
+      <div className="card">
         <h2>Objetivo y perfil</h2>
         <div className="grid4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Num label="Peso inicial" step={0.1} value={cfg.goal.start_kg} onChange={(v) => set("goal", { ...cfg.goal, start_kg: v })} />

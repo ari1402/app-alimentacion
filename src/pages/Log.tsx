@@ -72,7 +72,7 @@ export default function Log() {
   }, [params, actions]);
 
   const date = day === "hoy" ? snap.today : addDays(snap.today, -1);
-  const dayState = useMemo(() => buildDayState(date, data.meals, data.config), [date, data.meals, data.config]);
+  const dayState = useMemo(() => buildDayState(date, data.meals, data.config, data.workouts), [date, data.meals, data.config, data.workouts]);
   const draftTotals = totalsOf(items);
   const after = useMemo(() => ({
     kcal: dayState.totals.kcal + draftTotals.kcal,
@@ -266,7 +266,7 @@ export default function Log() {
           <h2>Revisá y confirmá</h2>
           <ItemsEditor items={items} foods={data.foods} onChange={setItems} />
           <div className="faint" style={{ marginTop: 8 }}>
-            Después de esto: {Math.round(after.kcal)} / {data.config.targets.kcal} kcal · {Math.round(after.p)} / {data.config.ranges.pMin} g P
+            Después de esto: {Math.round(after.kcal)} / {dayState.target.kcal} kcal · {Math.round(after.p)} / {dayState.ranges.pMin} g P
             {draftTotals.c > data.config.carb_rule_threshold ? ` · más de ${data.config.carb_rule_threshold} g de carbos: la próxima, baja en carbos` : ""}
           </div>
           <div className="row" style={{ marginTop: 12 }}>

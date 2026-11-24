@@ -108,7 +108,7 @@ export function StoreProvider({ repo, initial, children }: { repo: Repo; initial
           setData((d) => ({ ...d, events: d.events.map((e) => (e.id === ev.id ? { ...e, response: "logged" } : e)) }));
         }
         const meals = upsertBy(d0.meals, m);
-        const after = buildDayState(m.local_date, meals, d0.config);
+        const after = buildDayState(m.local_date, meals, d0.config, d0.workouts);
         const s = buildSnapshot(d0.config, { meals, workouts: d0.workouts, metrics: d0.metrics, templates: d0.templates, events: d0.events }, new Date());
         return mealFeedback(m, after, s);
       }),

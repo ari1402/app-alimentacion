@@ -47,8 +47,10 @@ function momentumLine(s: Snapshot): string {
   return "";
 }
 
-function proteinIdea(gap: number, lowCarb: boolean, guardia: boolean): string {
+function proteinIdea(gap: number, lowCarb: boolean, guardia: boolean, evening = false): string {
   if (guardia) return gap > 30 ? "yogur griego + scoop de whey, o sándwich de pavo" : "un yogur griego o una barrita proteica";
+  // De noche conviene proteína de digestión lenta (caseína): mejora la síntesis nocturna (Res 2012; Snijders 2015)
+  if (evening && gap <= 45) return gap >= 25 ? "yogur griego + cottage o ricota antes de dormir (caseína, digestión lenta)" : "un yogur griego antes de dormir";
   if (gap >= 40) return lowCarb ? "150 g de carne magra o 2 huevos + 3 claras" : "150 g de carne magra o una lata de atún";
   if (gap >= 20) return "un yogur griego o un scoop de whey en leche";
   return "un huevo o 2 fetas de pavo";
@@ -61,18 +63,18 @@ function preWorkoutLine(s: Snapshot): string {
 }
 
 /** Ajuste concreto para mañana según lo que más se alejó hoy */
-export function tomorrowAdjustment(day: DayState, s: Snapshot): string {
-  const cfg = s.cfg;
+export function tomorrowAdjustment(day: DayState, _s?: Snapshot): string {
+  const R = day.ranges;
   const t = day.totals;
   if (day.meals.length === 0) return "Mañana arrancamos de cero: registrá el desayuno y ya estás.";
   if (t.kcal < 1100 && day.meals.length >= 2)
     return "Hoy quedaste bastante abajo. Comer de menos no acelera la baja y te cuesta el músculo: mañana apuntá al rango completo.";
-  const pGap = cfg.ranges.pMin - t.p;
+  const pGap = R.pMin - t.p;
   if (pGap > 15) return `Mañana: sumá proteína temprano (el desayuno con ~35 g, ej. panqueque proteico o yogur griego + whey). Hoy faltaron ${r(pGap)} g.`;
-  if (t.kcal > cfg.ranges.kcal[1] + 150) return "Mañana: día normal, sin compensar. Si querés, una cena baja en carbos y el margen semanal hace el resto.";
-  if (t.c > cfg.ranges.c[1] + 20) return "Mañana: repartí mejor los carbos (que ninguna comida pase de 50 g) y listo.";
-  if (t.f > cfg.ranges.f[1] + 10) return "Mañana: mirá el aceite y los quesos; medir 1 cda de aceite cambia bastante.";
-  if (t.kcal < cfg.ranges.kcal[0] - 150) return "Mañana: comé las 4 comidas completas, no hace falta recortar.";
+  if (t.kcal > R.kcal[1] + 150) return "Mañana: día normal, sin compensar. Si querés, una cena baja en carbos y el margen semanal hace el resto.";
+  if (t.c > R.c[1] + 20) return "Mañana: repartí mejor los carbos (que ninguna comida pase de 50 g) y listo.";
+  if (t.f > R.f[1] + 10) return "Mañana: mirá el aceite y los quesos; medir 1 cda de aceite cambia bastante.";
+  if (t.kcal < R.kcal[0] - 150) return "Mañana: comé las 4 comidas completas, no hace falta recortar.";
   return "Día redondo. Mañana, lo mismo.";
 }
 
@@ -80,7 +82,7 @@ export function tomorrowAdjustment(day: DayState, s: Snapshot): string {
 
 export function morningMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
   const c = s.cfg;
-  const parts: string[] = [`Objetivo: ${c.targets.kcal} kcal y ≥${c.ranges.pMin} g de proteína.`];
+  const parts: string[] = [`Objetivo: ${s.day.target.kcal} kcal y ≥${s.day.ranges.pMin} g de proteína${s.day.adjust.dietBreak ? " (pausa de mantenimiento)" : ""}.`];
   if (s.guardia) parts.push("Modo guardia: priorizá proteína cada 4–5 h, lo demás se acomoda.");
   else if (s.workouts.isTrainingDay && !s.workouts.trainedToday) parts.push(`Hoy toca fuerza (${c.workout.time}). ${preWorkoutLine(s)}`);
   if (!s.day.slotsLogged.includes("desayuno")) {
@@ -88,6 +90,7 @@ export function morningMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
     if (o) parts.push(`Desayuno que entra: ${optionLine(o)}.`);
   }
   if (!s.weighedToday) parts.push("Si podés, pesate ahora en ayunas: recalcula la proyección.");
+  if (s.cycle?.retention) parts.push("Fase con retención de agua: si la balanza sube, es agua.");
   const m = momentumLine(s);
   if (m) parts.push(m);
   if (s.yesterday.status === "off" && c.why) parts.push(`Tu porqué: "${c.why}".`);
@@ -117,13 +120,13 @@ export function slotMessage(s: Snapshot, slot: Exclude<Slot, "snack">): Omit<Nud
 }
 
 export function afternoonMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
-  const c = s.cfg;
+  const R = s.day.ranges;
   const proj = projectDayClose(s.day, s.typical);
   const parts = [`Llevás ${s.day.totals.kcal} kcal y ${r(s.day.totals.p)} g P. Con lo que solés comer en lo que falta, cerrarías en ~${proj.kcal} kcal y ${r(proj.p)} g de proteína.`];
-  const pGap = c.ranges.pMin - proj.p;
-  if (pGap > 5) parts.push(`Para cerrar la proteína sumá ~${r(pGap)} g: ${proteinIdea(pGap, s.day.carbRule.active, s.guardia)}.`);
-  else if (proj.kcal > c.ranges.kcal[1]) parts.push(`Viene ~${r(proj.kcal - c.ranges.kcal[1])} kcal alto: una cena con menos carbos lo acomoda.`);
-  else if (proj.kcal < c.ranges.kcal[0] - 150) parts.push("Viene bajo: cená completo, no hace falta recortar.");
+  const pGap = R.pMin - proj.p;
+  if (pGap > 5) parts.push(`Para cerrar la proteína sumá ~${r(pGap)} g: ${proteinIdea(pGap, s.day.carbRule.active, s.guardia, s.minutes >= 20 * 60)}.`);
+  else if (proj.kcal > R.kcal[1]) parts.push(`Viene ~${r(proj.kcal - R.kcal[1])} kcal alto: una cena con menos carbos lo acomoda.`);
+  else if (proj.kcal < R.kcal[0] - 150) parts.push("Viene bajo: cená completo, no hace falta recortar.");
   else parts.push("Venís bien encaminada.");
   return { kind: "tarde", title: "Proyección del día", body: parts.join(" "), url: "/" };
 }
@@ -141,7 +144,7 @@ export function nightMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
   const ok = d.checklist.filter((x) => x.ok).length;
   const t = d.totals;
   const body = [
-    `${t.kcal} kcal · ${r(t.p)} P · ${r(t.c)} C · ${r(t.f)} G → ${ok}/4 del checklist.`,
+    `${t.kcal} kcal · ${r(t.p)} P · ${r(t.c)} C · ${r(t.f)} G → ${ok}/4 del checklist${d.adjust.cardioBonusKcal ? ` (objetivo de hoy +${d.adjust.cardioBonusKcal} por cardio)` : ""}.`,
     tomorrowAdjustment(d, s),
   ];
   const m = momentumLine(s);
@@ -157,6 +160,7 @@ export function weeklyMessage(s: Snapshot): Omit<Nudge, "dedupe_key"> {
   const parts = [`${good}/${logged || 7} días en rango, proteína ok ${w.proteinDaysOk} días. Entrenos: ${s.workouts.done}/${s.workouts.goalMin}.`];
   if (p.currentTrend != null) parts.push(`Tendencia: ${p.currentTrend} kg (${p.kgPerWeek != null && p.kgPerWeek < 0 ? `${p.kgPerWeek} kg/sem` : "estable"}).`);
   if (p.dateRange) parts.push(`Llegada estimada a ${s.cfg.goal.target_max} kg: ${fmtRange(p.dateRange[0], p.dateRange[1])}.`);
+  if (s.cfg.auto_adjust.enabled && s.targetRec.action !== "datos") parts.push(`Revisión del objetivo: ${s.targetRec.title}.`);
   if (logged && good / logged >= 0.8) parts.push("Eso es sostenible: seguí igual.");
   else if (w.adherence.off >= 3) parts.push("La semana que viene, un solo foco: proteína en el desayuno. Lo demás se ordena solo.");
   return { kind: "semanal", title: "Cierre de la semana", body: parts.join(" "), url: "/progreso" };
@@ -175,10 +179,15 @@ export function mealFeedback(meal: Meal, after: DayState, s: Snapshot): string {
   const c = s.cfg;
   const parts: string[] = [];
   const p = r(meal.totals.p);
-  if (after.totals.p >= c.ranges.pMin && after.totals.p - meal.totals.p < c.ranges.pMin)
+  const R = after.ranges;
+  if (after.totals.p >= R.pMin && after.totals.p - meal.totals.p < R.pMin)
     parts.push(`Con esta ${slotLabel(meal.slot).toLowerCase()} cerrás la proteína del día ✓.`);
   else parts.push(`${p} g de proteína en esta comida; te quedan ${Math.max(0, r(after.remaining.p))} g y ${Math.max(0, after.remaining.kcal)} kcal.`);
   if (meal.totals.c > c.carb_rule_threshold) parts.push(`Tuvo ${r(meal.totals.c)} g de carbos: la próxima, baja en carbos.`);
+  // Reparto de proteína: ~0.3–0.4 g/kg por comida principal (Schoenfeld & Aragon 2018)
+  const kg = s.projection.currentTrend ?? c.goal.start_kg;
+  if (meal.slot !== "snack" && meal.totals.p < 0.3 * kg - 5 && meal.totals.kcal > 250)
+    parts.push(`Para el músculo rinde más repartir ~${Math.round(0.3 * kg)}–${Math.round(0.4 * kg)} g de proteína por comida.`);
   if (after.remaining.kcal < -100) parts.push(`Quedás ${-after.remaining.kcal} kcal sobre el objetivo; va al margen de la semana (${s.week.marginKcal >= 0 ? "+" : ""}${s.week.marginKcal}).`);
   else if (after.pendingSlots.length && after.remaining.p > 0)
     parts.push(`Para lo que falta: ~${after.proteinPerPendingMeal} g de proteína por comida.`);
@@ -280,7 +289,7 @@ export function coachCard(s: Snapshot): Omit<Nudge, "dedupe_key"> {
     return {
       kind: "tarde",
       title: "Arrancá por lo simple",
-      body: `Todavía no hay registros hoy. Cargá lo que comiste en una frase (15 s) y te digo qué conviene para lo que falta. Objetivo: ${cfg.targets.kcal} kcal y ≥${cfg.ranges.pMin} g de proteína.`,
+      body: `Todavía no hay registros hoy. Cargá lo que comiste en una frase (15 s) y te digo qué conviene para lo que falta. Objetivo: ${s.day.target.kcal} kcal y ≥${s.day.ranges.pMin} g de proteína.`,
       url: "/registrar",
     };
   }

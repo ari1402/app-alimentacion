@@ -22,11 +22,11 @@ export function Ring({ value, target, color, label, unit, size = 74, min, max }:
     <div className="ring" aria-label={`${label}: ${Math.round(value)} de ${target} ${unit}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
         <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--track)" strokeWidth={sw} fill="none" />
-        <circle
+        {shown > 0.005 && <circle
           cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={sw} fill="none" strokeLinecap="round"
           strokeDasharray={`${C * shown} ${C}`} transform={`rotate(-90 ${size / 2} ${size / 2})`}
           style={{ transition: "stroke-dasharray .5s ease" }}
-        />
+        />}
         {tick(min)}
         <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" fontSize="15" fontWeight="650" fill="var(--text)">
           {Math.round(value)}
@@ -38,9 +38,9 @@ export function Ring({ value, target, color, label, unit, size = 74, min, max }:
   );
 }
 
-export function MacroRings({ totals, cfg, simple }: { totals: Macros; cfg: UserConfig; simple?: boolean }) {
-  const t = cfg.targets;
-  const r = cfg.ranges;
+export function MacroRings({ totals, target, ranges, simple }: { totals: Macros; target: Macros; ranges: UserConfig["ranges"]; simple?: boolean }) {
+  const t = target;
+  const r = ranges;
   return (
     <div className="rings" style={simple ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
       <Ring value={totals.kcal} target={t.kcal} color="var(--s1)" label="kcal" unit="kcal" min={r.kcal[0]} max={r.kcal[1]} />

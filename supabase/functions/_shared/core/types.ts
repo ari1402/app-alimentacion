@@ -68,11 +68,31 @@ export interface WorkoutExercise {
   sets: WorkoutSet[];
 }
 export type WorkoutType = "fuerza" | "cardio" | "otro";
+
+export type CardioModality =
+  | "caminata" | "caminata_inclinada" | "bici" | "eliptico" | "correr" | "natacion"
+  | "remo" | "escaladora" | "hiit" | "baile" | "otro";
+export type CardioIntensity = "suave" | "moderada" | "intensa";
+
+export interface CardioSession {
+  modality: CardioModality;
+  minutes: number;
+  intensity: CardioIntensity;
+  /** Frecuencia cardíaca promedio (opcional, mejora la estimación) */
+  avg_hr?: number | null;
+  /** kcal que marcó el reloj/máquina (opcional; se corrige por sobreestimación) */
+  device_kcal?: number | null;
+  /** kcal netas estimadas (por encima del reposo), calculadas al registrar */
+  net_kcal: number;
+  method: string;
+}
+
 export interface Workout {
   id: string;
   local_date: string;
   type: WorkoutType;
   exercises: WorkoutExercise[];
+  cardio?: CardioSession | null;
   duration_min?: number | null;
   notes?: string | null;
   created_at?: string;
@@ -85,6 +105,8 @@ export interface BodyMetric {
   waist_cm?: number | null;
   hip_cm?: number | null;
   thigh_cm?: number | null;
+  /** Pasos del día (NEAT) */
+  steps?: number | null;
   note?: string | null;
 }
 
@@ -204,4 +226,25 @@ export interface UserConfig {
   reintroductions: string[];
   /** Cada cuántos días pedir medidas */
   measure_every_days: number;
+  /** Ajuste del objetivo por cardio */
+  cardio: {
+    /** Fracción de las kcal netas del cardio que se suman al objetivo del día (0–1). 0.5 por defecto. */
+    eatback: number;
+    /** Tope de kcal que puede sumar el cardio en un día */
+    max_bonus: number;
+  };
+  /** Revisión semanal del objetivo (adaptativa) */
+  auto_adjust: {
+    enabled: boolean;
+    /** Ritmo buscado, % del peso por semana */
+    target_rate_pct: number;
+  };
+  /** Historial de cambios de objetivo (para no ajustar antes de 2 semanas) */
+  target_history: { date: string; kcal: number; reason: string }[];
+  /** Pausa de mantenimiento (diet break) */
+  diet_break?: { from: string; until: string; kcal: number } | null;
+  /** Ciclo menstrual (opcional): explica variaciones de agua en la balanza */
+  cycle: { enabled: boolean; last_start?: string | null; length: number };
+  /** Pasos diarios objetivo (NEAT) */
+  steps_goal: number;
 }

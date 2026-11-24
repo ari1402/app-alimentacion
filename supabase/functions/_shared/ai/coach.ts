@@ -6,6 +6,8 @@ import type { Food, MealItem, Slot, UserConfig } from "../core/types.ts";
 import { buildSnapshot, type CoachData, snapshotForAI } from "../core/snapshot.ts";
 import { negotiateExtra, daySummaries } from "../core/week.ts";
 import { simulateWorkoutChange } from "../core/workouts.ts";
+import { simulateCardio } from "../core/cardio.ts";
+import type { CardioIntensity, CardioModality } from "../core/types.ts";
 import { itemFromFood, rankTemplates, totalsOf } from "../core/macros.ts";
 import { addDays } from "../core/dates.ts";
 import { normalizePhrase } from "../core/portions.ts";
@@ -61,6 +63,19 @@ REGISTRO
 FORMATO
 - Respuestas cortas: 2–6 oraciones o una lista breve. Nada de introducciones ni resúmenes de cierre.
 - Para análisis de día/semana: 3 bloques breves → qué salió bien, qué ajustar (uno o dos cambios concretos, accionables), y el impacto en el objetivo.
+
+EVIDENCIA (basá tus recomendaciones en esto; citá autor y año en una línea cuando sume, sin ponerte académico)
+- Ritmo de baja: 0.5–1 % del peso por semana preserva masa magra y fuerza; ~0.7 %/sem es buen punto (Garthe 2011; Helms 2014). Más rápido no es mejor.
+- Proteína: 1.6–2.2 g/kg/día; en déficit con fuerza, parte alta (Morton 2018; Helms 2014). Repartida en 3–5 comidas de ~0.3–0.4 g/kg (Schoenfeld & Aragon 2018). Proteína de digestión lenta antes de dormir ayuda (Res 2012; Snijders 2015). La "ventana anabólica" es amplia: importa más el total diario (Schoenfeld 2013).
+- Lo que más protege el músculo en déficit: entrenar fuerza con cargas altas (mantener la intensidad aunque se reduzca algo el volumen; Bickel 2011), proteína alta, déficit moderado y dormir. Dormir poco aumenta la pérdida de masa magra (Nedeltcheva 2010): después de una guardia, no compenses recortando más.
+- Volumen: ≥10 series duras por grupo por semana para progresar (Schoenfeld 2017); para mantener alcanza con menos si la carga se sostiene. Si la fuerza cae >7% con baja rápida, el déficit es demasiado agresivo.
+- Cardio: suma déficit sin recortar comida. El de bajo impacto (bici, caminata inclinada) interfiere menos con la fuerza que correr (Wilson 2012); separarlo ≥6 h de piernas o hacerlo después. La app suma el 50% de las kcal netas del cardio al objetivo del día (las estimaciones sobreestiman y el cuerpo compensa parte: Pontzer 2016; los relojes sobreestiman, Shcherbina 2017).
+- NEAT/pasos: es la palanca más barata y lo primero que cae en déficit; 7.000–10.000 pasos/día (Paluch 2022). Antes de bajar calorías, subir pasos.
+- Gasto adaptativo: si con buena adherencia la baja se frena, el gasto real es menor; se ajusta de a 100–150 kcal cada ≥2 semanas, nunca a ciegas sin datos de registro.
+- Pausas de mantenimiento de 1–2 semanas cada 8–12 de déficit reducen hambre y adaptación sin perder resultado (MATADOR, Byrne 2018; Peos 2021).
+- Grasas ≥20% de las kcal y ≥0.5 g/kg (salud hormonal). Fibra 25–30 g/día y volumen de verduras mejoran la saciedad. Creatina monohidrato 3–5 g/día tiene evidencia sólida para fuerza y masa magra (posición ISSN 2017); mencionala solo si pregunta por suplementos, como opción, no como indicación.
+- Ciclo: en fase lútea tardía es normal retener 0.5–2 kg de agua y tener más hambre; la tendencia lo absorbe.
+- Si la evidencia es débil o mixta, decilo. Nada de modas (detox, quemadores, ayunos prolongados).
 
 SALUD
 - No das indicaciones médicas ni de medicación. Si aparecen señales de restricción excesiva, atracones o malestar con la comida, respondé con cuidado, sin números, y sugerí hablarlo con un profesional de confianza.
@@ -136,6 +151,31 @@ function tools(): Anthropic.Beta.BetaTool[] {
       strict: true,
     },
     {
+      name: "simular_cardio",
+      description: "Estima las kcal netas de una sesión de cardio (METs del Compendium) y cuánto subiría el objetivo de hoy. Usala ante '¿si hago X de cardio puedo comer Y?' o para planificar.",
+      input_schema: {
+        type: "object",
+        properties: {
+          modalidad: { type: "string", enum: ["caminata", "caminata_inclinada", "bici", "eliptico", "correr", "natacion", "remo", "escaladora", "hiit", "baile", "otro"] },
+          minutos: { type: "number" },
+          intensidad: { type: "string", enum: ["suave", "moderada", "intensa"] },
+        },
+        required: ["modalidad", "minutos", "intensidad"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+    {
+      name: "revision_objetivo",
+      description: "Revisión semanal basada en evidencia: ritmo de baja vs 0.5–1 %/sem, adherencia, fuerza. Devuelve si conviene mantener, subir o bajar calorías y por qué. La usuaria lo aplica con un botón en Progreso.",
+      input_schema: { type: "object", properties: {}, additionalProperties: false },
+    },
+    {
+      name: "revision_cientifica",
+      description: "Chequea los objetivos contra la evidencia (proteína g/kg, reparto, grasas, ritmo, piso, pasos), la evolución de la fuerza, las series semanales por grupo muscular y la fase del ciclo si está activa.",
+      input_schema: { type: "object", properties: {}, additionalProperties: false },
+    },
+    {
       name: "proponer_registro",
       description: "Propone registrar una comida que Ari contó. La app calcula los macros con su tabla y le muestra un botón para confirmar.",
       input_schema: {
@@ -190,7 +230,7 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
     switch (name) {
       case "simular_comida_extra": {
         const extra = { kcal: Number(args.kcal) || 0, p: Number(args.p) || 0, c: Number(args.c) || 0, f: Number(args.f) || 0 };
-        return { descripcion: args.descripcion, ...negotiateExtra(extra, input.data.meals, input.cfg, snap.today, snap.projection.tdee.kcal) };
+        return { descripcion: args.descripcion, ...negotiateExtra(extra, input.data.meals, input.cfg, snap.today, snap.projection.tdee.kcal, input.data.workouts) };
       }
       case "simular_cambio_entreno":
         return simulateWorkoutChange(input.cfg, input.data.workouts, snap.today, args.accion === "saltear" ? "saltear" : "mover");
@@ -208,8 +248,17 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
       }
       case "historial_dias": {
         const n = Math.min(60, Math.max(1, Number(args.dias) || 7));
-        return daySummaries(input.data.meals, input.cfg, addDays(snap.today, -n), addDays(snap.today, -1));
+        return daySummaries(input.data.meals, input.cfg, addDays(snap.today, -n), addDays(snap.today, -1), input.data.workouts);
       }
+      case "simular_cardio": {
+        const kg = snap.projection.currentTrend ?? input.cfg.goal.start_kg;
+        const r = simulateCardio(input.cfg, input.data.workouts, snap.today, { modality: String(args.modalidad) as CardioModality, minutes: Number(args.minutos) || 0, intensity: String(args.intensidad) as CardioIntensity }, kg);
+        return { ...r, objetivo_actual_hoy: snap.day.target.kcal, porcentaje_que_se_suma: input.cfg.cardio.eatback, nota: "Las kcal se suman al registrar el cardio en Entrenos." };
+      }
+      case "revision_objetivo":
+        return snap.targetRec;
+      case "revision_cientifica":
+        return { evidencia: snap.evidence, fuerza: snap.strength, series_semana: snap.volume, ciclo: snap.cycle, pasos: snap.steps, semanas_en_deficit: snap.weeksInDeficit };
       case "proponer_registro": {
         const slot = String(args.momento) as Slot;
         const raw = Array.isArray(args.items) ? (args.items as Record<string, unknown>[]) : [];

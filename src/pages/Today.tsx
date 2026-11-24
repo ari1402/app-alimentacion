@@ -21,6 +21,7 @@ export function WeightSheet({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <Sheet open={open} onClose={onClose} title="Peso de hoy">
       <p className="faint" style={{ marginTop: 0 }}>Idealmente a la mañana, en ayunas, después del baño. El número de un día tiene ruido (agua, sodio, ciclo): mirá la tendencia.</p>
+      {snap.cycle?.retention && <div className="banner" style={{ marginBottom: 8 }}>{snap.cycle.note}</div>}
       <div className="row">
         <input type="number" inputMode="decimal" step="0.1" value={kg} onChange={(e) => setKg(e.target.value)} placeholder="kg" autoFocus aria-label="Peso en kg" />
         <button className="btn primary" onClick={save}>Guardar</button>
@@ -87,11 +88,19 @@ export default function Today() {
       </div>
 
       <div className="card">
-        <MacroRings totals={d.totals} cfg={cfg} simple={cfg.simple_mode} />
+        <MacroRings totals={d.totals} target={d.target} ranges={d.ranges} simple={cfg.simple_mode} />
+        {(d.adjust.cardioBonusKcal > 0 || d.adjust.dietBreak) && (
+          <div className="faint" style={{ marginTop: 8, textAlign: "center" }}>
+            Objetivo de hoy {d.target.kcal} kcal
+            {d.adjust.cardioBonusKcal > 0 && <> · +{d.adjust.cardioBonusKcal} por cardio ({d.adjust.cardioNetKcal} netas × {Math.round(cfg.cardio.eatback * 100)}%, a carbos)</>}
+            {d.adjust.dietBreak && <> · pausa de mantenimiento</>}
+          </div>
+        )}
         {d.carbRule.active && <div className="banner" style={{ marginTop: 12 }}>{d.carbRule.reason}</div>}
-        <div className="grid2" style={{ marginTop: 12 }}>
+        <div className="grid3" style={{ marginTop: 12 }}>
           <Link to="/registrar" className="btn primary">+ Comida</Link>
           <button className="btn" onClick={() => setWeightOpen(true)}>{snap.weighedToday ? "Peso ✓" : "+ Peso"}</button>
+          <Link to="/entrenos/nuevo?tipo=cardio" className="btn">+ Cardio</Link>
         </div>
       </div>
 
@@ -160,6 +169,13 @@ export default function Today() {
           </details>
         )}
       </div>
+
+      {cfg.auto_adjust.enabled && (snap.targetRec.action === "subir" || snap.targetRec.action === "bajar") && (
+        <Link to="/progreso" className="card" style={{ display: "block", textDecoration: "none", color: "inherit", borderLeft: "3px solid var(--warning)" }}>
+          <strong>Revisión semanal del objetivo</strong>
+          <div className="muted small">{snap.targetRec.title}. Tocá para ver por qué y aplicarlo.</div>
+        </Link>
+      )}
 
       {snap.adaptive.notes.length > 0 && (
         <details className="card">

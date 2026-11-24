@@ -199,6 +199,12 @@ export function defaultConfig(today: string): UserConfig {
     simple_mode: false,
     reintroductions: ["merluza", "pollo (disimulado)"],
     measure_every_days: 21,
+    cardio: { eatback: 0.5, max_bonus: 400 },
+    auto_adjust: { enabled: true, target_rate_pct: 0.7 },
+    target_history: [],
+    diet_break: null,
+    cycle: { enabled: false, last_start: null, length: 28 },
+    steps_goal: 8000,
   };
 }
 
@@ -216,6 +222,10 @@ export function mergeConfig(saved: Partial<UserConfig> | null | undefined, today
     goal: { ...d.goal, ...saved.goal },
     profile: { ...d.profile, ...saved.profile },
     quiet_hours: { ...d.quiet_hours, ...saved.quiet_hours },
+    cardio: { ...d.cardio, ...saved.cardio },
+    auto_adjust: { ...d.auto_adjust, ...saved.auto_adjust },
+    cycle: { ...d.cycle, ...saved.cycle },
+    target_history: saved.target_history ?? [],
     notifications: { ...d.notifications, ...saved.notifications, kinds: { ...d.notifications.kinds, ...saved.notifications?.kinds } },
   };
 }

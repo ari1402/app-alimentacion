@@ -1,5 +1,6 @@
 // Motor de macros: acumulado, restante, reglas y checklist de cierre.
-import type { Food, Macros, Meal, MealItem, MealTemplate, Slot, UserConfig } from "./types.ts";
+import type { Food, Macros, Meal, MealItem, MealTemplate, Slot, UserConfig, Workout } from "./types.ts";
+import { type DayTargets, targetsForDay } from "./cardio.ts";
 import { MAIN_SLOTS } from "./types.ts";
 
 export const ZERO: Macros = { kcal: 0, p: 0, c: 0, f: 0 };
@@ -71,6 +72,9 @@ export interface DayState {
   meals: Meal[];
   totals: Macros;
   target: Macros;
+  /** Rangos del día (ya ajustados por cardio o pausa de mantenimiento) */
+  ranges: UserConfig["ranges"];
+  adjust: Pick<DayTargets, "cardioNetKcal" | "cardioBonusKcal" | "cardioSessions" | "dietBreak">;
   remaining: Macros;
   pct: Macros; // 0..1+ por macro
   slotsLogged: Slot[];
@@ -83,8 +87,7 @@ export interface DayState {
   proteinPerPendingMeal: number;
 }
 
-export function checklist(t: Macros, cfg: UserConfig): ChecklistItem[] {
-  const r = cfg.ranges;
+export function checklist(t: Macros, r: UserConfig["ranges"]): ChecklistItem[] {
   const inRange = (v: number, [a, b]: [number, number]) => (v < a ? v - a : v > b ? v - b : 0);
   return [
     { key: "kcal", label: "Calorías", value: Math.round(t.kcal), target: `${r.kcal[0]}–${r.kcal[1]}`, delta: inRange(t.kcal, r.kcal), ok: inRange(t.kcal, r.kcal) === 0 },
@@ -101,23 +104,24 @@ export function checklist(t: Macros, cfg: UserConfig): ChecklistItem[] {
  *  off  = lejos
  *  empty = sin registros
  */
-export function dayStatus(t: Macros, cfg: UserConfig, mealsCount: number): DayStatus {
+export function dayStatus(t: Macros, r: UserConfig["ranges"], mealsCount: number): DayStatus {
   if (mealsCount === 0) return "empty";
-  const [lo, hi] = cfg.ranges.kcal;
+  const [lo, hi] = r.kcal;
   const kcalOk = t.kcal >= lo && t.kcal <= hi;
-  const pOk = t.p >= cfg.ranges.pMin;
+  const pOk = t.p >= r.pMin;
   if (kcalOk && pOk) return "on";
   const kcalNear = t.kcal >= lo * 0.9 && t.kcal <= hi * 1.1;
-  const pNear = t.p >= cfg.ranges.pMin * 0.9;
+  const pNear = t.p >= r.pMin * 0.9;
   return kcalNear && pNear ? "near" : "off";
 }
 
-export function buildDayState(date: string, meals: Meal[], cfg: UserConfig): DayState {
+export function buildDayState(date: string, meals: Meal[], cfg: UserConfig, workouts: Workout[] = []): DayState {
   const dayMeals = meals
     .filter((m) => m.local_date === date && m.confirmed !== false)
     .sort((a, b) => a.eaten_at.localeCompare(b.eaten_at));
   const totals = sum(dayMeals.map((m) => m.totals));
-  const target = cfg.targets;
+  const dt = targetsForDay(cfg, date, workouts);
+  const target = dt.targets;
   const remaining = roundMacros(sub(target, totals));
   const pct = {
     kcal: target.kcal ? totals.kcal / target.kcal : 0,
@@ -142,14 +146,16 @@ export function buildDayState(date: string, meals: Meal[], cfg: UserConfig): Day
     meals: dayMeals,
     totals,
     target,
+    ranges: dt.ranges,
+    adjust: { cardioNetKcal: dt.cardioNetKcal, cardioBonusKcal: dt.cardioBonusKcal, cardioSessions: dt.cardioSessions, dietBreak: dt.dietBreak },
     remaining,
     pct,
     slotsLogged,
     pendingSlots,
     lastMeal,
     carbRule,
-    checklist: checklist(totals, cfg),
-    status: dayStatus(totals, cfg, dayMeals.length),
+    checklist: checklist(totals, dt.ranges),
+    status: dayStatus(totals, dt.ranges, dayMeals.length),
     proteinPerPendingMeal: Math.max(0, Math.round(remaining.p / pending)),
   };
 }

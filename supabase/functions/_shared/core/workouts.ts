@@ -104,7 +104,9 @@ export interface WeekWorkoutStatus {
 export function weekWorkoutStatus(cfg: UserConfig, workouts: Workout[], today: string): WeekWorkoutStatus {
   const ws = weekStart(today);
   const we = addDays(ws, 6);
-  const thisWeek = workouts.filter((w) => w.local_date >= ws && w.local_date <= we && w.type !== "otro");
+  // El objetivo semanal (3–4) es de FUERZA; el cardio se registra aparte y ajusta calorías.
+  const strength = workouts.filter((w) => w.type === "fuerza");
+  const thisWeek = strength.filter((w) => w.local_date >= ws && w.local_date <= we);
   const trainedToday = thisWeek.some((w) => w.local_date === today);
   const todayWd = weekdayOf(today);
   const isTrainingDay = cfg.workout.days.includes(todayWd);
@@ -123,7 +125,7 @@ export function weekWorkoutStatus(cfg: UserConfig, workouts: Workout[], today: s
     plannedRemaining: planned,
     trainedToday,
     isTrainingDay,
-    last14: new Set(workouts.filter((w) => w.local_date >= from14 && w.local_date <= today).map((w) => w.local_date)).size,
+    last14: new Set(strength.filter((w) => w.local_date >= from14 && w.local_date <= today).map((w) => w.local_date)).size,
   };
 }
 

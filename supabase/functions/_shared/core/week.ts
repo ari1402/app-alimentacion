@@ -1,5 +1,5 @@
 // Semana: presupuesto semanal de calorías, adherencia, rachas y negociación.
-import type { Macros, Meal, UserConfig } from "./types.ts";
+import type { Macros, Meal, UserConfig, Workout } from "./types.ts";
 import { addDays, dateRange, weekStart } from "./dates.ts";
 import { buildDayState, type DayStatus, round1 } from "./macros.ts";
 import { SAFETY_FLOOR_KCAL, delayDaysForKcal } from "./weight.ts";
@@ -10,9 +10,13 @@ export interface DaySummary {
   kcal: number;
   p: number;
   meals: number;
+  /** objetivo de kcal de ese día (con cardio / pausa) */
+  target: number;
+  pMin: number;
+  cardioBonus: number;
 }
 
-export function daySummaries(meals: Meal[], cfg: UserConfig, from: string, to: string): DaySummary[] {
+export function daySummaries(meals: Meal[], cfg: UserConfig, from: string, to: string, workouts: Workout[] = []): DaySummary[] {
   const byDate = new Map<string, Meal[]>();
   for (const m of meals) {
     if (m.local_date < from || m.local_date > to) continue;
@@ -21,8 +25,8 @@ export function daySummaries(meals: Meal[], cfg: UserConfig, from: string, to: s
     byDate.set(m.local_date, l);
   }
   return dateRange(from, to).map((d) => {
-    const st = buildDayState(d, byDate.get(d) ?? [], cfg);
-    return { date: d, status: st.status, kcal: st.totals.kcal, p: st.totals.p, meals: st.meals.length };
+    const st = buildDayState(d, byDate.get(d) ?? [], cfg, workouts);
+    return { date: d, status: st.status, kcal: st.totals.kcal, p: st.totals.p, meals: st.meals.length, target: st.target.kcal, pMin: st.ranges.pMin, cardioBonus: st.adjust.cardioBonusKcal };
   });
 }
 
@@ -42,19 +46,19 @@ export interface WeekBudget {
   days: DaySummary[];
 }
 
-export function weekBudget(meals: Meal[], cfg: UserConfig, today: string): WeekBudget {
+export function weekBudget(meals: Meal[], cfg: UserConfig, today: string, workouts: Workout[] = []): WeekBudget {
   const start = weekStart(today);
   const end = addDays(start, 6);
-  const days = daySummaries(meals, cfg, start, end);
+  const days = daySummaries(meals, cfg, start, end, workouts);
   const closed = days.filter((d) => d.date < today && d.status !== "empty");
   const todayDay = days.find((d) => d.date === today);
-  const marginKcal = Math.round(closed.reduce((a, d) => a + (cfg.targets.kcal - d.kcal), 0));
+  const marginKcal = Math.round(closed.reduce((a, d) => a + (d.target - d.kcal), 0));
   const consumed = Math.round(closed.reduce((a, d) => a + d.kcal, 0) + (todayDay?.kcal ?? 0));
   const daysLeft = days.filter((d) => d.date >= today).length;
   // días sin registro se asumen en objetivo (no inventamos excesos)
-  const emptyPast = days.filter((d) => d.date < today && d.status === "empty").length;
-  const budget = cfg.targets.kcal * 7;
-  const perDayLeft = daysLeft ? Math.round((budget - consumed - emptyPast * cfg.targets.kcal + (todayDay?.kcal ?? 0)) / daysLeft) : 0;
+  const emptyPastKcal = days.filter((d) => d.date < today && d.status === "empty").reduce((a, d) => a + d.target, 0);
+  const budget = days.reduce((a, d) => a + d.target, 0);
+  const perDayLeft = daysLeft ? Math.round((budget - consumed - emptyPastKcal + (todayDay?.kcal ?? 0)) / daysLeft) : 0;
   const adherence = { on: 0, near: 0, off: 0, empty: 0 };
   for (const d of days.filter((x) => x.date < today || (x.date === today && x.status !== "empty"))) adherence[d.status]++;
   return {
@@ -67,7 +71,7 @@ export function weekBudget(meals: Meal[], cfg: UserConfig, today: string): WeekB
     daysLeft,
     perDayLeft,
     adherence,
-    proteinDaysOk: closed.filter((d) => d.p >= cfg.ranges.pMin).length,
+    proteinDaysOk: closed.filter((d) => d.p >= d.pMin).length,
     days,
   };
 }
@@ -80,8 +84,8 @@ export interface Streak {
 }
 
 /** Racha que perdona: un día "near" no corta la racha, solo un "off" o un día sin registro. */
-export function streak(meals: Meal[], cfg: UserConfig, today: string, lookback = 120): Streak {
-  const days = daySummaries(meals, cfg, addDays(today, -lookback), addDays(today, -1));
+export function streak(meals: Meal[], cfg: UserConfig, today: string, lookback = 120, workouts: Workout[] = []): Streak {
+  const days = daySummaries(meals, cfg, addDays(today, -lookback), addDays(today, -1), workouts);
   let current = 0;
   for (let i = days.length - 1; i >= 0; i--) {
     if (days[i].status === "on" || days[i].status === "near") current++;
@@ -98,7 +102,7 @@ export function streak(meals: Meal[], cfg: UserConfig, today: string, lookback =
 }
 
 export interface NegotiationOption {
-  key: "hoy" | "semana" | "aceptar";
+  key: "hoy" | "semana" | "aceptar" | "cardio";
   title: string;
   detail: string;
   feasible: boolean;
@@ -123,9 +127,11 @@ export function negotiateExtra(
   cfg: UserConfig,
   today: string,
   tdeeKcal: number,
+  workouts: Workout[] = [],
 ): Negotiation {
-  const day = buildDayState(today, meals, cfg);
-  const week = weekBudget(meals, cfg, today);
+  const day = buildDayState(today, meals, cfg, workouts);
+  const week = weekBudget(meals, cfg, today, workouts);
+  const R = day.ranges;
   const dayAfter = {
     kcal: Math.round(day.totals.kcal + extra.kcal),
     p: round1(day.totals.p + extra.p),
@@ -135,12 +141,12 @@ export function negotiateExtra(
   // Lo que todavía va a comer hoy según el plan
   const plannedRest = Math.max(0, day.remaining.kcal);
   const projectedDay = Math.max(dayAfter.kcal, day.totals.kcal + plannedRest + extra.kcal);
-  const overDay = Math.max(0, Math.round(projectedDay - cfg.ranges.kcal[1]));
+  const overDay = Math.max(0, Math.round(projectedDay - R.kcal[1]));
   const options: NegotiationOption[] = [];
   const pending = day.pendingSlots.length;
 
   if (overDay === 0) {
-    options.push({ key: "hoy", title: "Entra en el día", detail: `Con eso seguís dentro del rango (${cfg.ranges.kcal[0]}–${cfg.ranges.kcal[1]}). Cuidá que lo que falta tenga proteína: te quedan ${Math.max(0, Math.round(day.remaining.p - extra.p))} g.`, feasible: true });
+    options.push({ key: "hoy", title: "Entra en el día", detail: `Con eso seguís dentro del rango (${R.kcal[0]}–${R.kcal[1]}). Cuidá que lo que falta tenga proteína: te quedan ${Math.max(0, Math.round(day.remaining.p - extra.p))} g.`, feasible: true });
   } else {
     // Opción A: ajustar comidas que faltan hoy (sin tocar proteína, sin bajar del piso)
     const maxCut = pending * 200;
@@ -160,6 +166,7 @@ export function negotiateExtra(
     const daysAfter = Math.max(0, week.daysLeft - 1);
     const perDay = daysAfter ? Math.round(overDay / daysAfter) : overDay;
     const weekFeasible = daysAfter > 0 && perDay <= 150 && cfg.targets.kcal - perDay >= SAFETY_FLOOR_KCAL;
+    const cardioTip = "Otra opción: 30–40 min de cardio suave (caminata inclinada o bici) suma ~150–250 kcal netas; la app ajusta el objetivo del día cuando lo registrás.";
     options.push({
       key: "semana",
       title: "Absorberlo en la semana",
@@ -170,6 +177,7 @@ export function negotiateExtra(
         : "Es el último día de la semana; si te pasás, arranca limpia la próxima.",
       feasible: weekFeasible || week.marginKcal >= overDay,
     });
+    if (overDay >= 150) options.push({ key: "cardio", title: "Moverte un poco más", detail: cardioTip, feasible: true });
   }
   const deficit = tdeeKcal - cfg.targets.kcal;
   const delay = delayDaysForKcal(overDay, deficit);

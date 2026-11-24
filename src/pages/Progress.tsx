@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { addDays, daySummaries, fmtRange, fmtShort, weekStart, weightTrend } from "@core";
+import { addDays, applyTargets, daySummaries, fmtRange, fmtShort, weekStart, weightTrend } from "@core";
 import { useStore } from "../lib/store";
 import { LineChart } from "../components/LineChart";
 import { Sheet } from "../components/Sheet";
@@ -60,6 +60,81 @@ function Reintros() {
   );
 }
 
+function TargetReview() {
+  const { data, snap, actions, toast } = useStore();
+  const rec = snap.targetRec;
+  const cfg = data.config;
+  const color = rec.action === "subir" || rec.action === "bajar" ? "var(--warning)" : rec.action === "mantener" ? "var(--good)" : "var(--border)";
+  const apply = async () => {
+    if (!rec.newTargets) return;
+    await actions.saveConfig(applyTargets(cfg, rec.newTargets, snap.today, rec.title));
+    toast(`Objetivo actualizado: ${rec.newTargets.kcal} kcal. Próxima revisión en 2 semanas.`);
+  };
+  const startBreak = async () => {
+    const kcal = Math.round(snap.projection.tdee.kcal / 50) * 50;
+    await actions.saveConfig({ ...cfg, diet_break: { from: snap.today, until: addDays(snap.today, 13), kcal } });
+    toast(`Pausa de mantenimiento: 2 semanas a ~${kcal} kcal. La proteína sigue igual.`);
+  };
+  return (
+    <div className="card" style={{ borderLeft: `3px solid ${color}` }}>
+      <h2>Revisión del objetivo</h2>
+      <div style={{ fontWeight: 650 }}>{rec.title}</div>
+      <ul className="small muted" style={{ paddingLeft: 18, margin: "6px 0" }}>
+        {rec.reasons.map((r) => <li key={r}>{r}</li>)}
+      </ul>
+      {rec.newTargets && (
+        <div className="banner" style={{ margin: "8px 0" }}>
+          Propuesta: <strong>{rec.newTargets.kcal} kcal</strong> · P {rec.newTargets.p} · C {rec.newTargets.c} · G {rec.newTargets.f}
+          <span className="faint"> (hoy: {cfg.targets.kcal} · {cfg.targets.p} · {cfg.targets.c} · {cfg.targets.f})</span>
+        </div>
+      )}
+      {rec.alternatives.length > 0 && (
+        <>
+          <div className="faint" style={{ marginTop: 6 }}>{rec.newTargets ? "Alternativas:" : "Opciones:"}</div>
+          <ul className="small muted" style={{ paddingLeft: 18, margin: "4px 0" }}>{rec.alternatives.map((a) => <li key={a}>{a}</li>)}</ul>
+        </>
+      )}
+      <div className="row wrap" style={{ marginTop: 8 }}>
+        {rec.newTargets && <button className="btn primary sm" onClick={apply}>Aplicar {rec.deltaKcal > 0 ? "+" : ""}{rec.deltaKcal} kcal</button>}
+        {rec.dietBreakSuggested && <button className="btn sm" onClick={startBreak}>Empezar pausa de 2 semanas</button>}
+        {cfg.diet_break && cfg.diet_break.until >= snap.today && (
+          <button className="btn sm ghost" onClick={() => actions.saveConfig({ ...cfg, diet_break: null })}>Terminar pausa ({fmtShort(cfg.diet_break.until)})</button>
+        )}
+      </div>
+      <p className="faint" style={{ marginBottom: 0 }}>Ritmo ideal para tu peso: {rec.idealKgWeek[0]}–{rec.idealKgWeek[1]} kg/sem (0.5–1 %). Ajustes de 100–150 kcal, cada ≥2 semanas, sin tocar la proteína.</p>
+    </div>
+  );
+}
+
+function StepsAndCycle() {
+  const { data, snap, actions, toast } = useStore();
+  const cfg = data.config;
+  const yesterday = addDays(snap.today, -1);
+  const prev = data.metrics.find((m) => m.local_date === yesterday)?.steps;
+  const [steps, setSteps] = useState(prev ? String(prev) : "");
+  return (
+    <div className="card">
+      <h2>Pasos</h2>
+      <div className="row">
+        <input type="number" inputMode="numeric" placeholder="Pasos de ayer" value={steps} onChange={(e) => setSteps(e.target.value)} aria-label="Pasos de ayer" />
+        <button className="btn" onClick={async () => { const n = Number(steps); if (n > 0) { await actions.saveMetric({ id: uid(), local_date: yesterday, steps: n }); toast("Pasos guardados"); } }}>Guardar</button>
+      </div>
+      <div className="faint" style={{ marginTop: 6 }}>
+        Promedio 7 días: {snap.steps.avg != null ? snap.steps.avg.toLocaleString("es-AR") : "—"} · objetivo {cfg.steps_goal.toLocaleString("es-AR")}.
+        {" "}El movimiento diario (NEAT) es lo primero que cae en déficit y la palanca más barata.
+      </div>
+      {cfg.cycle.enabled && (
+        <>
+          <hr />
+          <h2>Ciclo</h2>
+          {snap.cycle ? <p className="small" style={{ marginTop: 0 }}>Día {snap.cycle.day} · fase {snap.cycle.phase}. {snap.cycle.note}</p> : <p className="faint" style={{ marginTop: 0 }}>Marcá el primer día del período para interpretar mejor la balanza.</p>}
+          <button className="btn sm" onClick={() => actions.saveConfig({ ...cfg, cycle: { ...cfg.cycle, last_start: snap.today } })}>Empezó hoy</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Progress() {
   const { data, snap } = useStore();
   const [params] = useSearchParams();
@@ -77,8 +152,8 @@ export default function Progress() {
 
   const weeks = useMemo(() => {
     const start = weekStart(addDays(snap.today, -7 * 7));
-    return daySummaries(data.meals, cfg, start, addDays(weekStart(snap.today), 6));
-  }, [data.meals, cfg, snap.today]);
+    return daySummaries(data.meals, cfg, start, addDays(weekStart(snap.today), 6), data.workouts);
+  }, [data.meals, data.workouts, cfg, snap.today]);
 
   const label: Record<string, string> = { on: "en rango", near: "cerca", off: "lejos", empty: "sin registro" };
 
@@ -141,6 +216,8 @@ export default function Progress() {
         <div className="faint" style={{ marginTop: 8 }}>Gasto estimado: {p.tdee.kcal} kcal/día ({p.tdee.basis === "datos" ? "calculado con tus datos" : p.tdee.basis === "mixto" ? "mezcla de tus datos y la fórmula" : "estimación teórica"}).</div>
       </div>
 
+      <TargetReview />
+
       <div className="card">
         <h2>Hitos</h2>
         {p.milestones.map((m) => (
@@ -185,6 +262,7 @@ export default function Progress() {
         </div>
       )}
 
+      <StepsAndCycle />
       <Reintros />
       <WeightSheet open={weightOpen} onClose={() => setWeightOpen(false)} />
       <MeasureSheet open={measureOpen} onClose={() => setMeasureOpen(false)} />
