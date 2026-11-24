@@ -1,9 +1,13 @@
-// Cliente de IA del frontend. NUNCA llama a Anthropic directo: pasa por la Edge
-// Function (nube) o por el servidor de Vite (dev local). La key no está acá.
-import type { Food, LearnedPortion, MealItem, Slot, UserConfig } from "@core";
+// Cliente de IA del frontend. La key NUNCA está en el código:
+// - Modo nube: pasa por la Edge Function; la key vive cifrada en Supabase Vault.
+// - Modo local con key cargada en Ajustes: la key está solo en este dispositivo
+//   (IndexedDB) y la app llama a api.anthropic.com directo por HTTPS.
+// - Modo local sin key: servidor de desarrollo (`npm run dev` + .env.local).
+import { localDate, mergeConfig, type Food, type LearnedPortion, type MealItem, type Slot, type UserConfig } from "@core";
 import type { CoachData } from "@core";
 import { supabase } from "./supabase";
-import { localKeyHeader } from "./apiKey";
+import { getLocalKey } from "./apiKey";
+import { kvGet, kvSet } from "./idb";
 
 export class AIUnavailable extends Error {}
 
@@ -31,17 +35,55 @@ async function call<T>(fn: "parse-meal" | "coach", body: Record<string, unknown>
     }
     return data as T;
   }
-  // Modo local: solo existe con `npm run dev` y ANTHROPIC_API_KEY en .env.local
+  // Modo local con key en el dispositivo: llamada directa a Anthropic desde el navegador
+  const key = await getLocalKey();
+  if (key) return direct<T>(fn, key, { ...body, ...localExtra() });
+
+  // Modo local sin key: servidor de desarrollo (`npm run dev` con ANTHROPIC_API_KEY en .env.local)
   let res: Response;
   try {
-    res = await fetch(`/api/${fn}`, { method: "POST", headers: { "content-type": "application/json", ...(await localKeyHeader()) }, body: JSON.stringify({ ...body, ...localExtra() }) });
+    res = await fetch(`${import.meta.env.BASE_URL}api/${fn}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, ...localExtra() }) });
   } catch {
     throw new AIUnavailable("IA no disponible sin conexión.");
   }
-  if (res.status === 404 || res.status === 503) throw new AIUnavailable((await res.json().catch(() => ({}))).error ?? "IA no disponible en modo local.");
+  if (res.status === 404 || res.status === 405 || res.status === 503 || !(res.headers.get("content-type") ?? "").includes("json")) {
+    throw new AIUnavailable((await res.json().catch(() => ({}))).error ?? "Falta la API key: cargala en Ajustes → API key de Claude.");
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
   return json as T;
+}
+
+/** Límite diario de consultas también en modo local */
+async function bumpLocalBudget(): Promise<void> {
+  const cfg = mergeConfig(await kvGet<UserConfig>("config"), localDate());
+  const today = localDate(new Date(), cfg.timezone);
+  const u = (await kvGet<{ date: string; count: number }>("ai_usage")) ?? { date: today, count: 0 };
+  const count = u.date === today ? u.count : 0;
+  if (count >= cfg.ai_daily_limit) throw new Error(`Llegaste al límite de ${cfg.ai_daily_limit} consultas de IA por hoy (Ajustes → IA). La carga por lista sigue funcionando.`);
+  await kvSet("ai_usage", { date: today, count: count + 1 });
+}
+
+async function direct<T>(fn: "parse-meal" | "coach", key: string, body: Record<string, any>): Promise<T> {
+  await bumpLocalBudget();
+  // Carga diferida: el SDK solo se descarga la primera vez que se usa la IA
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 1 });
+  try {
+    if (fn === "parse-meal") {
+      const { parseMeal } = await import("@ai/parseMeal.ts");
+      return (await parseMeal(client, body as any)) as T;
+    }
+    const { runCoach } = await import("@ai/coach.ts");
+    return (await runCoach(client, { ...(body as any), now: new Date() })) as T;
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
+      throw new AIUnavailable("La API key no es válida o fue revocada. Cargá una nueva en Ajustes → API key de Claude.");
+    }
+    if (e instanceof Anthropic.RateLimitError) throw new Error("La IA está saturada o llegaste al límite de tu cuenta. Probá en un minuto.");
+    if (e instanceof Anthropic.APIConnectionError) throw new AIUnavailable("Sin conexión con la IA.");
+    throw e;
+  }
 }
 
 export function parseMealAI(

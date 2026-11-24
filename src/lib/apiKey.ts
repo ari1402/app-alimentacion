@@ -1,8 +1,8 @@
 // API key de Claude cargada desde la app.
 // - Modo nube: se manda UNA vez a la Edge Function `api-key`, que la valida y la guarda
 //   cifrada en Supabase Vault. El navegador no la guarda y el servidor nunca la devuelve.
-// - Modo local (npm run dev): queda solo en este dispositivo (IndexedDB) y se envía al
-//   servidor de desarrollo local en cada consulta. Nunca entra al código ni a Git.
+// - Modo local (por ej. GitHub Pages sin Supabase): queda solo en este dispositivo
+//   (IndexedDB) y la app llama a api.anthropic.com directo. Nunca entra al código ni a Git.
 import { supabase } from "./supabase";
 import { kvGet, kvSet } from "./idb";
 
@@ -47,9 +47,8 @@ export async function deleteKey(): Promise<KeyStatus> {
   return { configured: false, last4: null, source: null };
 }
 
-/** Solo modo local: header para el servidor de desarrollo */
-export async function localKeyHeader(): Promise<Record<string, string>> {
-  if (supabase) return {};
-  const k = await kvGet<string>(LOCAL);
-  return k ? { "x-anthropic-key": k } : {};
+/** Solo modo local: la key guardada en este dispositivo (o null) */
+export async function getLocalKey(): Promise<string | null> {
+  if (supabase) return null;
+  return (await kvGet<string>(LOCAL)) || null;
 }

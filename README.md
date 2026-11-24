@@ -91,7 +91,7 @@ Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan
 2. **Actions → "Publicar en GitHub Pages" → Run workflow** (después se publica solo en cada push).
 3. Link: **https://ari1402.github.io/app-alimentacion/**
 
-Sin más configuración funciona en modo local (datos en el dispositivo, sin IA ni push). Para tener todo, seguí la opción 2 y cargá en **Settings → Secrets and variables → Actions → Variables** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_VAPID_PUBLIC_KEY` (públicas por diseño). La API key de Claude **no** va ahí: se carga desde la app.
+Sin más configuración funciona en **modo local**: los datos quedan en el dispositivo y, si cargás tu API key en **Ajustes → API key de Claude**, la IA también funciona. En este modo la key se guarda **solo en ese dispositivo** (IndexedDB) y la app llama a `api.anthropic.com` directo por HTTPS: no pasa por GitHub ni por ningún servidor intermedio. Lo único que no hay sin Supabase son las notificaciones push programadas. Para tener todo, seguí la opción 2 y cargá en **Settings → Secrets and variables → Actions → Variables** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_VAPID_PUBLIC_KEY` (públicas por diseño). La API key de Claude **no** va ahí: se carga desde la app.
 
 ### Opción 2 — producción (Supabase + push)
 
@@ -138,7 +138,7 @@ La tabla de alimentos y las plantillas A1–A15 / C1–C10 vienen precargadas co
 
 | Dato | Dónde vive | ¿En GitHub? |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Supabase Vault (cargada desde Ajustes), o `supabase secrets`, o `.env.local` en dev (sin prefijo `VITE_`) | ❌ nunca |
+| `ANTHROPIC_API_KEY` | Modo local: solo en tu dispositivo (cargada desde Ajustes). Modo nube: Supabase Vault (cargada desde Ajustes) o `supabase secrets`. Dev: `.env.local` (sin prefijo `VITE_`) | ❌ nunca |
 | `VAPID_PRIVATE_KEY`, `CRON_SECRET` | `supabase secrets` + Vault | ❌ nunca |
 | Service role key | La inyecta Supabase en las funciones | ❌ nunca |
 | URL + anon key de Supabase, VAPID pública | Variables `VITE_*` del hosting | Públicas por diseño (la seguridad es RLS) |
@@ -147,8 +147,9 @@ Capas de protección:
 - `.gitignore` excluye `.env`, `.env.*`, `supabase/functions/.env` y similares.
 - **Hook pre-commit** (`.githooks/pre-commit`, se instala con `npm install`) corre `scripts/check-secrets.mjs` y bloquea commits con claves `sk-ant-…`, JWTs, claves privadas o archivos `.env`.
 - **CI** (GitHub Actions) corre gitleaks sobre todo el historial + el mismo escáner + tests + build.
-- El frontend **nunca** llama a Anthropic: pasa por la Edge Function, que valida tu sesión, tu email y el presupuesto diario.
-- Verificado: el build (`dist/`) no contiene el SDK de Anthropic ni ninguna key.
+- En modo nube el frontend no llama a Anthropic: pasa por la Edge Function, que valida tu sesión y el presupuesto diario. En modo local llama directo con la key que guardaste en ese dispositivo (con límite diario igual).
+- Verificado: el build (`dist/`) no contiene ninguna key; el workflow de Pages lo vuelve a chequear antes de publicar.
+- Recomendado: límite de gasto mensual en console.anthropic.com → Billing.
 
 Si alguna vez se filtra una key: revocála en console.anthropic.com, generá otra y `supabase secrets set ANTHROPIC_API_KEY=…`.
 

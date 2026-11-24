@@ -154,7 +154,7 @@ function ApiKeyCard() {
       <p className="faint" style={{ marginBottom: 0 }}>
         {repo.mode === "cloud"
           ? "Se valida con Anthropic y se guarda cifrada en Supabase Vault. No queda en el código, en GitHub ni en este navegador, y la app nunca la vuelve a mostrar."
-          : "Modo local: queda guardada solo en este dispositivo y se usa con el servidor de desarrollo. No queda en el código ni en GitHub."}
+          : "Modo local: queda guardada solo en este dispositivo (no en el código, no en GitHub, no en ningún servidor). La app le habla a Claude directo desde acá por HTTPS. Cargala en cada dispositivo que uses."}
         {" "}La sacás en console.anthropic.com → API Keys. Te conviene ponerle un límite de gasto mensual ahí.
       </p>
     </div>

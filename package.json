@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Coach personal de nutrición y entrenamiento (PWA + Supabase + Claude)",
+  "description": "Coach personal de nutrici\u00f3n y entrenamiento (PWA + Supabase + Claude)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
@@ -16,13 +16,14 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.13.0",
     "@supabase/supabase-js": "2.119.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-router-dom": "7.18.6"
+    "react-router-dom": "7.18.6",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "1.13.0",
     "@types/node": "22.15.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -30,7 +31,6 @@
     "typescript": "5.9.3",
     "vite": "8.3.8",
     "vitest": "5.1.1",
-    "web-push": "3.6.7",
-    "zod": "4.6.7"
+    "web-push": "3.6.7"
   }
 }
