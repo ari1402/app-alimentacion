@@ -14,9 +14,10 @@ const PATTERNS = [
   [/sb_secret_[a-zA-Z0-9_-]{20,}/, "Secret key de Supabase"],
   [/eyJhbGciOi[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, "JWT (¿service_role key de Supabase?)"],
   [/-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/, "Clave privada"],
+  // Valores literales (no variables tipo ${x} o $VAR)
   [/VAPID_PRIVATE_KEY\s*=\s*[A-Za-z0-9_-]{30,}/, "Clave privada VAPID"],
-  [/CRON_SECRET\s*=\s*\S{12,}/, "CRON_SECRET"],
-  [/ANTHROPIC_API_KEY\s*=\s*\S{12,}/, "ANTHROPIC_API_KEY con valor"],
+  [/CRON_SECRET\s*=\s*[A-Za-z0-9_+\/-]{12,}/, "CRON_SECRET"],
+  [/ANTHROPIC_API_KEY\s*=\s*[A-Za-z0-9_-]{12,}/, "ANTHROPIC_API_KEY con valor"],
 ];
 const FORBIDDEN_FILES = [/(^|\/)\.env$/, /(^|\/)\.env\.(?!example$)[^/]+$/, /supabase\/functions\/\.env$/, /\.pem$/, /vapid.*\.json$/i];
 

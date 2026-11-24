@@ -93,7 +93,11 @@ Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan
 
 Sin más configuración funciona en **modo local**: los datos quedan en el dispositivo y, si cargás tu API key en **Ajustes → API key de Claude**, la IA también funciona. En este modo la key se guarda **solo en ese dispositivo** (IndexedDB) y la app llama a `api.anthropic.com` directo por HTTPS: no pasa por GitHub ni por ningún servidor intermedio. Lo único que no hay sin Supabase son las notificaciones push programadas. Para tener todo, seguí la opción 2 y cargá en **Settings → Secrets and variables → Actions → Variables** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_VAPID_PUBLIC_KEY` (públicas por diseño). La API key de Claude **no** va ahí: se carga desde la app.
 
-### Opción 2 — producción (Supabase + push)
+### Opción 2 — Supabase (notificaciones push, sincronización, respaldo)
+
+**Atajo:** creá el proyecto en supabase.com y corré `npm run setup:supabase`. El script hace login, crea las tablas, genera las claves de notificaciones, carga los secretos y publica las funciones; al final te imprime el SQL del cron y las variables para GitHub, listos para copiar. No escribe ningún secreto en archivos.
+
+Paso a paso manual (lo mismo que hace el script):
 
 1. **Crear el proyecto** en [supabase.com](https://supabase.com) e instalar el CLI (`npm i -g supabase`).
 2. **Base de datos:**
