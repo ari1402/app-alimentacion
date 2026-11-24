@@ -16,6 +16,7 @@ const Progress = lazy(() => import("./pages/Progress"));
 const Workouts = lazy(() => import("./pages/Workouts"));
 const WorkoutNew = lazy(() => import("./pages/Workouts").then((m) => ({ default: m.WorkoutNew })));
 const Settings = lazy(() => import("./pages/Settings"));
+const Recipes = lazy(() => import("./pages/Recipes"));
 
 function Nav() {
   return (
@@ -66,6 +67,7 @@ function Shell() {
             <Route path="/entrenos" element={<Workouts />} />
             <Route path="/entrenos/nuevo" element={<WorkoutNew />} />
             <Route path="/ajustes" element={<Settings />} />
+            <Route path="/recetas" element={<Recipes />} />
             <Route path="*" element={<Today />} />
           </Routes>
         </Suspense>

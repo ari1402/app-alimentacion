@@ -2,7 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   addDays, type BodyMetric, type CoachData, type CoachEvent, type Food, type LearnedPortion, localDate,
-  type Meal, type MealTemplate, type Workout,
+  type Meal, type MealTemplate, type Recipe, type Workout,
 } from "../core/index.ts";
 
 export async function loadFoods(db: SupabaseClient, userId: string): Promise<Food[]> {
@@ -34,4 +34,9 @@ export async function loadCoachData(db: SupabaseClient, userId: string, tz: stri
     templates: (templates.data ?? []) as MealTemplate[],
     events: (events.data ?? []) as CoachEvent[],
   };
+}
+
+export async function loadRecipes(db: SupabaseClient, userId: string): Promise<Recipe[]> {
+  const { data } = await db.from("recipes").select("*").eq("user_id", userId).limit(500);
+  return (data ?? []) as Recipe[];
 }

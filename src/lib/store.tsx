@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildDayState, buildSnapshot, type BodyMetric, type ChatMessage, type CoachEvent, type EventResponse, type Food,
-  learnPortions, localDate, type Meal, mealFeedback, type MealTemplate, type Reintroduction, type Snapshot, type UserConfig, type Workout,
+  learnPortions, localDate, type Meal, mealFeedback, type MealTemplate, type Recipe, type Reintroduction, type Snapshot, type UserConfig, type Workout,
 } from "@core";
 import type { AllData, Repo } from "./repo/types";
 
@@ -21,6 +21,8 @@ interface Actions {
   clearChat(): Promise<void>;
   saveReintro(r: Reintroduction): Promise<void>;
   deleteReintro(id: string): Promise<void>;
+  saveRecipe(r: Recipe): Promise<void>;
+  deleteRecipe(id: string): Promise<void>;
   respondEvent(id: string, r: EventResponse): Promise<void>;
   addEvent(e: CoachEvent): Promise<void>;
   importAll(d: Partial<AllData>): Promise<void>;
@@ -166,6 +168,14 @@ export function StoreProvider({ repo, initial, children }: { repo: Repo; initial
       deleteReintro: wrap(async (id) => {
         setData((d) => ({ ...d, reintros: d.reintros.filter((x) => x.id !== id) }));
         await repo.deleteReintro(id);
+      }),
+      saveRecipe: wrap(async (r) => {
+        setData((d) => ({ ...d, recipes: upsertBy(d.recipes, r) }));
+        await repo.upsertRecipe(r);
+      }),
+      deleteRecipe: wrap(async (id) => {
+        setData((d) => ({ ...d, recipes: d.recipes.filter((x) => x.id !== id) }));
+        await repo.deleteRecipe(id);
       }),
       respondEvent: async (id, r) => {
         setData((d) => ({ ...d, events: d.events.map((e) => (e.id === id && !e.response ? { ...e, response: r } : e)) }));

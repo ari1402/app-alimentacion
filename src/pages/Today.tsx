@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { coachCard, dayName, fmtRange, fmtShort, localParts, slotLabel, type Meal } from "@core";
 import { useStore } from "../lib/store";
 import { MacroRings } from "../components/Rings";
-import { IconGear, IconTrash } from "../components/Icons";
+import { IconBook, IconGear, IconTrash } from "../components/Icons";
 import { Sheet } from "../components/Sheet";
 import { uid } from "../lib/uid";
 
@@ -74,6 +74,7 @@ export default function Today() {
           <button className={`chip ${snap.guardia ? "on" : ""}`} onClick={toggleGuardia} title="Silencia recordatorios de rutina por 26 h">
             {snap.guardia ? "En guardia" : "Guardia"}
           </button>
+          <Link to="/recetas" className="icon-btn" aria-label="Recetas"><IconBook /></Link>
           <Link to="/ajustes" className="icon-btn" aria-label="Ajustes"><IconGear /></Link>
         </div>
       </div>
@@ -103,6 +104,15 @@ export default function Today() {
           <Link to="/entrenos/nuevo?tipo=cardio" className="btn">+ Cardio</Link>
         </div>
       </div>
+
+      {data.recipes.some((r) => (r.batch_left ?? 0) > 0) && (
+        <Link to="/recetas" className="card" style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+          <strong>En la heladera</strong>
+          <div className="small muted">
+            {data.recipes.filter((r) => (r.batch_left ?? 0) > 0).map((r) => `${r.name} (${r.batch_left})`).join(" · ")}
+          </div>
+        </Link>
+      )}
 
       <div className="card">
         <div className="row between">

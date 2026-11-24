@@ -2,7 +2,8 @@
 // Las cuentas las hacen herramientas deterministas (core/), no el modelo: así los
 // trade-offs que ve Ari son exactos y coherentes con la pantalla.
 import Anthropic from "@anthropic-ai/sdk";
-import type { Food, MealItem, Slot, UserConfig } from "../core/types.ts";
+import type { Food, MealItem, Recipe, Slot, UserConfig } from "../core/types.ts";
+import { perServing, rankRecipes } from "../core/recipes.ts";
 import { buildSnapshot, type CoachData, snapshotForAI } from "../core/snapshot.ts";
 import { negotiateExtra, daySummaries } from "../core/week.ts";
 import { simulateWorkoutChange } from "../core/workouts.ts";
@@ -22,6 +23,7 @@ export interface CoachInput {
   cfg: UserConfig;
   data: CoachData;
   foods: Food[];
+  recipes?: Recipe[];
   now?: Date;
   model?: string;
 }
@@ -176,6 +178,17 @@ function tools(): Anthropic.Beta.BetaTool[] {
       input_schema: { type: "object", properties: {}, additionalProperties: false },
     },
     {
+      name: "recetas_guardadas",
+      description: "Recetas que Ari tiene guardadas (incluye porciones cocinadas en la heladera), ordenadas por cuánto encajan en lo que le queda del día para ese momento. Si ninguna sirve, sugerile usar el generador de recetas de la app (Recetas → Generar).",
+      input_schema: {
+        type: "object",
+        properties: { momento: { type: "string", enum: ["desayuno", "almuerzo", "merienda", "cena", "snack"] } },
+        required: ["momento"],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+    {
       name: "proponer_registro",
       description: "Propone registrar una comida que Ari contó. La app calcula los macros con su tabla y le muestra un botón para confirmar.",
       input_schema: {
@@ -259,6 +272,12 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
         return snap.targetRec;
       case "revision_cientifica":
         return { evidencia: snap.evidence, fuerza: snap.strength, series_semana: snap.volume, ciclo: snap.cycle, pasos: snap.steps, semanas_en_deficit: snap.weeksInDeficit };
+      case "recetas_guardadas": {
+        const list = rankRecipes(input.recipes ?? [], String(args.momento) as Slot, snap.day).slice(0, 6);
+        return list.length
+          ? list.map((r) => ({ nombre: r.recipe.name, por_porcion: perServing(r.recipe), en_heladera: r.recipe.batch_left ?? 0, minutos: r.recipe.prep_min, encaja: r.fits, nota: r.why }))
+          : "No tiene recetas guardadas para ese momento.";
+      }
       case "proponer_registro": {
         const slot = String(args.momento) as Slot;
         const raw = Array.isArray(args.items) ? (args.items as Record<string, unknown>[]) : [];

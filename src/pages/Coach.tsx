@@ -67,7 +67,7 @@ export default function Coach() {
     try {
       const r = await coachAI(
         { mode, messages: history },
-        { cfg: data.config, data: { meals: data.meals, workouts: data.workouts, metrics: data.metrics, templates: data.templates, events: data.events }, foods: data.foods },
+        { cfg: data.config, data: { meals: data.meals, workouts: data.workouts, metrics: data.metrics, templates: data.templates, events: data.events }, foods: data.foods, recipes: data.recipes },
       );
       const am: ChatMessage = { id: uid(), created_at: new Date().toISOString(), role: "assistant", content: r.text };
       await actions.addChat(am);

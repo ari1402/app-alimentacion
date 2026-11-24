@@ -3,7 +3,7 @@
 // - Modo local con key cargada en Ajustes: la key está solo en este dispositivo
 //   (IndexedDB) y la app llama a api.anthropic.com directo por HTTPS.
 // - Modo local sin key: servidor de desarrollo (`npm run dev` + .env.local).
-import { localDate, mergeConfig, type Food, type LearnedPortion, type MealItem, type Slot, type UserConfig } from "@core";
+import { localDate, mergeConfig, type Food, type LearnedPortion, type Macros, type MealItem, type Recipe, type Slot, type UserConfig } from "@core";
 import type { CoachData } from "@core";
 import { supabase } from "./supabase";
 import { getLocalKey } from "./apiKey";
@@ -22,7 +22,9 @@ export interface CoachReply {
   proposals: { slot: Slot; items: MealItem[]; totals: MealItem }[];
 }
 
-async function call<T>(fn: "parse-meal" | "coach", body: Record<string, unknown>, localExtra: () => Record<string, unknown>): Promise<T> {
+type Fn = "parse-meal" | "coach" | "recipe";
+
+async function call<T>(fn: Fn, body: Record<string, unknown>, localExtra: () => Record<string, unknown>): Promise<T> {
   if (supabase) {
     const { data, error } = await supabase.functions.invoke(fn, { body });
     if (error) {
@@ -64,7 +66,7 @@ async function bumpLocalBudget(): Promise<void> {
   await kvSet("ai_usage", { date: today, count: count + 1 });
 }
 
-async function direct<T>(fn: "parse-meal" | "coach", key: string, body: Record<string, any>): Promise<T> {
+async function direct<T>(fn: Fn, key: string, body: Record<string, any>): Promise<T> {
   await bumpLocalBudget();
   // Carga diferida: el SDK solo se descarga la primera vez que se usa la IA
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
@@ -73,6 +75,10 @@ async function direct<T>(fn: "parse-meal" | "coach", key: string, body: Record<s
     if (fn === "parse-meal") {
       const { parseMeal } = await import("@ai/parseMeal.ts");
       return (await parseMeal(client, body as any)) as T;
+    }
+    if (fn === "recipe") {
+      const { generateRecipe } = await import("@ai/recipe.ts");
+      return (await generateRecipe(client, body as any)) as T;
     }
     const { runCoach } = await import("@ai/coach.ts");
     return (await runCoach(client, { ...(body as any), now: new Date() })) as T;
@@ -95,7 +101,7 @@ export function parseMealAI(
 
 export function coachAI(
   req: { mode: "chat" | "analisis_dia" | "analisis_semana"; messages: { role: "user" | "assistant"; content: string }[] },
-  local: { cfg: UserConfig; data: CoachData; foods: Food[] },
+  local: { cfg: UserConfig; data: CoachData; foods: Food[]; recipes?: Recipe[] },
 ): Promise<CoachReply> {
   return call("coach", { ...req, now: new Date().toISOString() }, () => local);
 }
@@ -111,4 +117,27 @@ export async function fileToImagePayload(file: File): Promise<{ media_type: "ima
   canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
   const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
   return { media_type: "image/jpeg", data: dataUrl.split(",")[1] };
+}
+
+export interface RecipeRequestUI {
+  slot: Exclude<Slot, "snack">;
+  target: Macros;
+  servings: number;
+  max_minutes: number;
+  have?: string;
+  wish?: string;
+  low_carb?: boolean;
+  portable?: boolean;
+  reintroduce?: string | null;
+  avoid?: string[];
+}
+
+export interface RecipeReply {
+  recipe: Recipe;
+  perServing: Macros;
+  deviation: { kcal: number; p: number };
+}
+
+export function recipeAI(req: RecipeRequestUI, local: { foods: Food[] }): Promise<RecipeReply> {
+  return call("recipe", req as unknown as Record<string, unknown>, () => local);
 }

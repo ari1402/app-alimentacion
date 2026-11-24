@@ -1,5 +1,5 @@
 // Modo local: todo queda en el dispositivo (IndexedDB). Sin cuenta, sin servidor.
-import { defaultConfig, localDate, mergeConfig, SEED_FOODS, SEED_TEMPLATES, type UserConfig } from "@core";
+import { defaultConfig, localDate, mergeConfig, SEED_FOODS, SEED_RECIPES, SEED_TEMPLATES, type UserConfig } from "@core";
 import { kvGet, kvSet } from "../idb";
 import type { AllData, Repo } from "./types";
 
@@ -35,7 +35,9 @@ export function localRepo(): Repo {
         await kvSet("foods", SEED_FOODS);
         await kvSet("templates", SEED_TEMPLATES);
       }
-      const [foods, templates, meals, workouts, metrics, events, portions, chat, reintros] = await Promise.all([
+      // Recetas base la primera vez (también para quien ya usaba la app)
+      if ((await kvGet("recipes")) === undefined) await kvSet("recipes", SEED_RECIPES);
+      const [foods, templates, meals, workouts, metrics, events, portions, chat, reintros, recipes] = await Promise.all([
         list<AllData["foods"][number]>("foods"),
         list<AllData["templates"][number]>("templates"),
         list<AllData["meals"][number]>("meals"),
@@ -45,8 +47,9 @@ export function localRepo(): Repo {
         list<AllData["portions"][number]>("portions"),
         list<AllData["chat"][number]>("chat"),
         list<AllData["reintros"][number]>("reintros"),
+        list<AllData["recipes"][number]>("recipes"),
       ]);
-      return { config: mergeConfig(config, today), foods, templates, meals, workouts, metrics, events, portions, chat, reintros };
+      return { config: mergeConfig(config, today), foods, templates, meals, workouts, metrics, events, portions, chat, reintros, recipes };
     },
     saveConfig: (c) => kvSet("config", c),
     upsertFood: (f) => upsert("foods", f),
@@ -89,9 +92,11 @@ export function localRepo(): Repo {
     clearChat: () => kvSet("chat", []),
     addReintro: (r) => upsert("reintros", r),
     deleteReintro: (id) => remove("reintros", id),
+    upsertRecipe: (r) => upsert("recipes", r),
+    deleteRecipe: (id) => remove("recipes", id),
     async importAll(d) {
       if (d.config) await kvSet("config", d.config);
-      for (const k of ["foods", "templates", "meals", "workouts", "metrics", "events", "portions", "chat", "reintros"] as Coll[]) {
+      for (const k of ["foods", "templates", "meals", "workouts", "metrics", "events", "portions", "chat", "reintros", "recipes"] as Coll[]) {
         if (Array.isArray(d[k])) await kvSet(k, d[k]);
       }
     },

@@ -1,5 +1,5 @@
 import type {
-  BodyMetric, ChatMessage, CoachEvent, EventResponse, Food, LearnedPortion, Meal, MealTemplate, Reintroduction, UserConfig, Workout,
+  BodyMetric, ChatMessage, CoachEvent, EventResponse, Food, LearnedPortion, Meal, MealTemplate, Recipe, Reintroduction, UserConfig, Workout,
 } from "@core";
 
 export interface AllData {
@@ -13,6 +13,7 @@ export interface AllData {
   portions: LearnedPortion[];
   chat: ChatMessage[];
   reintros: Reintroduction[];
+  recipes: Recipe[];
 }
 
 export interface Repo {
@@ -37,5 +38,7 @@ export interface Repo {
   clearChat(): Promise<void>;
   addReintro(r: Reintroduction): Promise<void>;
   deleteReintro(id: string): Promise<void>;
+  upsertRecipe(r: Recipe): Promise<void>;
+  deleteRecipe(id: string): Promise<void>;
   importAll(d: Partial<AllData>): Promise<void>;
 }

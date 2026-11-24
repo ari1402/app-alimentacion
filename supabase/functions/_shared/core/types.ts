@@ -59,6 +59,31 @@ export interface MealTemplate {
   totals: Macros;
 }
 
+export type RecipeTag = "alta proteína" | "baja en carbos" | "rápida" | "meal prep" | "portable" | "sin horno" | "dulce" | "reintroducción";
+
+export interface Recipe {
+  id: string;
+  name: string;
+  /** Momentos en los que encaja */
+  slots: Exclude<Slot, "snack">[];
+  /** Porciones que rinde la receta completa */
+  servings: number;
+  prep_min: number;
+  /** Ingredientes de la receta COMPLETA (gramos totales) */
+  ingredients: MealItem[];
+  steps: string[];
+  tips?: string | null;
+  tags: RecipeTag[];
+  /** Macros de la receta completa */
+  totals: Macros;
+  favorite?: boolean;
+  source: "base" | "ia" | "manual";
+  /** Meal prep: porciones cocinadas que quedan en la heladera */
+  batch_left?: number;
+  batch_cooked_at?: string | null;
+  created_at?: string;
+}
+
 export interface WorkoutSet {
   reps: number;
   kg: number;

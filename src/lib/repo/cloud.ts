@@ -1,6 +1,6 @@
 // Modo nube: Supabase (Postgres + RLS). Sincroniza entre dispositivos.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { addDays, type BodyMetric, localDate, mergeConfig, SEED_FOODS, SEED_TEMPLATES } from "@core";
+import { addDays, type BodyMetric, localDate, mergeConfig, type Recipe, SEED_FOODS, SEED_RECIPES, SEED_TEMPLATES } from "@core";
 import type { AllData, Repo } from "./types";
 
 function check<T>(r: { data: T; error: { message: string } | null }): NonNullable<T> {
@@ -27,8 +27,14 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
         check(await sb.from("meal_templates").upsert(SEED_TEMPLATES.map((t) => ({ ...t, ...own }))));
         config = mergeConfig(config, today);
       }
+      // Recetas base una sola vez (marca en la config para no volver a sembrar si las borrás)
+      if (!(config as { recipes_seeded?: boolean }).recipes_seeded) {
+        check(await sb.from("recipes").upsert(SEED_RECIPES.map((r) => ({ ...r, ...own })), { onConflict: "user_id,id", ignoreDuplicates: true }));
+        config = { ...config, recipes_seeded: true } as typeof config;
+        check(await sb.from("user_config").upsert({ ...own, config, updated_at: new Date().toISOString() }));
+      }
       const since = addDays(today, -400);
-      const [foods, templates, meals, workouts, metrics, events, portions, chat, reintros] = await Promise.all([
+      const [foods, templates, meals, workouts, metrics, events, portions, chat, reintros, recipes] = await Promise.all([
         sb.from("foods").select("*").limit(5000),
         sb.from("meal_templates").select("*"),
         sb.from("meals_logged").select("*").gte("local_date", since).order("eaten_at").limit(10000),
@@ -38,6 +44,7 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
         sb.from("portions").select("*"),
         sb.from("chat_messages").select("*").order("created_at", { ascending: false }).limit(100),
         sb.from("reintroductions").select("*").order("local_date"),
+        sb.from("recipes").select("*").order("created_at"),
       ]);
       return {
         config,
@@ -50,6 +57,7 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
         portions: check(portions).map((p) => ({ ...p, grams: Number(p.grams) })),
         chat: check(chat).reverse(),
         reintros: check(reintros),
+        recipes: check(recipes) as Recipe[],
       } as AllData;
     },
     async saveConfig(c) {
@@ -92,11 +100,16 @@ export function cloudRepo(sb: SupabaseClient, userId: string): Repo {
     async clearChat() { check(await sb.from("chat_messages").delete().eq("user_id", userId)); },
     async addReintro(r) { check(await sb.from("reintroductions").upsert({ ...r, ...own })); },
     async deleteReintro(id) { check(await sb.from("reintroductions").delete().eq("id", id)); },
+    async upsertRecipe(r) {
+      const { created_at: _c, ...row } = r;
+      check(await sb.from("recipes").upsert({ ...row, batch_left: row.batch_left ?? 0, ...own }));
+    },
+    async deleteRecipe(id) { check(await sb.from("recipes").delete().eq("id", id)); },
     async importAll(d) {
       if (d.config) await this.saveConfig(d.config);
       const map: [keyof AllData, string][] = [
         ["foods", "foods"], ["templates", "meal_templates"], ["meals", "meals_logged"], ["workouts", "workouts"],
-        ["metrics", "body_metrics"], ["portions", "portions"], ["reintros", "reintroductions"],
+        ["metrics", "body_metrics"], ["portions", "portions"], ["reintros", "reintroductions"], ["recipes", "recipes"],
       ];
       for (const [k, table] of map) {
         const rows = d[k] as Record<string, unknown>[] | undefined;

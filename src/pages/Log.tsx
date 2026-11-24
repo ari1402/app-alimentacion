@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  addDays, buildDayState, type Food, itemFromFood, localParts, type Meal, type MealItem, normalizePhrase, rankTemplates,
-  type Slot, SLOTS, slotForTime, slotLabel, totalsOf,
+  addDays, buildDayState, type Food, itemFromFood, localParts, type Meal, type MealItem, normalizePhrase, rankRecipes, rankTemplates,
+  servingItems, type Slot, SLOTS, slotForTime, slotLabel, totalsOf,
 } from "@core";
 import { useStore } from "../lib/store";
 import { AIUnavailable, fileToImagePayload, parseMealAI } from "../lib/ai";
@@ -63,6 +63,7 @@ export default function Log() {
   const [busy, setBusy] = useState(false);
   const [clarify, setClarify] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [recipeUses, setRecipeUses] = useState<Record<string, number>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const speech = useSpeech((t) => setText((p) => (p ? `${p} ${t}` : t)));
 
@@ -131,6 +132,11 @@ export default function Log() {
     setBusy(true);
     try {
       const fb = await actions.logMeal(meal);
+      // Meal prep: descontar porciones usadas de la heladera
+      for (const [id, n] of Object.entries(recipeUses)) {
+        const r = data.recipes.find((x) => x.id === id);
+        if (r?.batch_left) await actions.saveRecipe({ ...r, batch_left: Math.max(0, r.batch_left - n) });
+      }
       toast(fb);
       nav("/");
     } finally {
@@ -154,6 +160,7 @@ export default function Log() {
   }, [data.meals, slot]);
   const ranked = useMemo(() => rankTemplates(data.templates, slot, dayState), [data.templates, slot, dayState]);
   const results = useMemo(() => searchFoods(data.foods, q).slice(0, 40), [data.foods, q]);
+  const rankedRecipes = useMemo(() => rankRecipes(data.recipes, slot, dayState), [data.recipes, slot, dayState]);
 
   return (
     <div>
@@ -219,6 +226,20 @@ export default function Log() {
                     <div className="faint">{slotLabel(m.slot)} · {m.totals.kcal} kcal · {Math.round(m.totals.p)} g P</div>
                   </div>
                   <button className="btn sm" onClick={() => { setItems((p) => [...p, ...m.items.map((i) => ({ ...i }))]); setSource("repeat"); }}>+ Agregar</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {rankedRecipes.length > 0 && (
+            <div className="card">
+              <div className="row between"><h2 style={{ margin: 0 }}>Recetas</h2><Link to="/recetas" className="faint small">Ver todas</Link></div>
+              {rankedRecipes.slice(0, 5).map(({ recipe: r, fits, why }) => (
+                <div className="list-item" key={r.id}>
+                  <div className="grow">
+                    <div style={{ fontWeight: 550 }}>{r.batch_left ? "🥡 " : ""}{r.name}</div>
+                    <div className="faint">{fits ? "✓ entra · " : ""}{why}</div>
+                  </div>
+                  <button className="btn sm" onClick={() => { setItems((p) => [...p, ...servingItems(r, 1)]); setSource("template"); setRecipeUses((u) => ({ ...u, [r.id]: (u[r.id] ?? 0) + 1 })); }}>+ 1 porción</button>
                 </div>
               ))}
             </div>

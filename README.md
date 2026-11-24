@@ -49,6 +49,14 @@ App personal (un solo usuario) que funciona como coach: registra comidas y entre
 - Proteína de digestión lenta antes de dormir cuando falta (Res 2012).
 - El coach con IA tiene este marco de evidencia en su prompt y herramientas para simular cardio, revisar el objetivo y hacer el chequeo científico.
 
+### Recetas, meal prep y lista de compras
+
+- **Mis recetas:** 10 recetas base altas en proteína (panqueques proteicos, albóndigas de pollo en salsa, guiso de lentejas, tarta sin masa, etc.) + las que generes o cargues. Se guardan en el dispositivo o en Supabase (tabla `recipes` con RLS).
+- **Generador con IA:** elegís momento, porciones (1–6, meal prep), tiempo máximo, lo que tenés en casa y opciones (baja en carbos, para llevar a la guardia, incluir una reintroducción). Apunta a lo que te queda del día o a macros que elijas; los macros finales salen de tu tabla de alimentos y, si se pasa, **"Ajustar a mi objetivo"** escala las cantidades.
+- **Meal prep:** "Cociné una tanda" anota las porciones en la heladera; cada vez que registrás una, se descuenta. Lo cocinado aparece primero en las sugerencias y en Hoy.
+- **Lista de compras:** elegís cuántas tandas de cada receta y arma la lista por categoría, con equivalencia a **crudo/seco** para comprar (ej. 900 g de pollo cocido ≈ 1,25 kg crudo). Se copia con un toque.
+- Registrar → Rápido muestra las recetas que mejor entran; el coach con IA también las conoce.
+
 ### Mejoras sobre el spec
 
 - **Foto y voz** para registrar en <15 s, además de texto.
@@ -121,6 +129,7 @@ Paso a paso manual (lo mismo que hace el script):
    supabase functions deploy parse-meal
    supabase functions deploy coach
    supabase functions deploy api-key
+   supabase functions deploy recipe
    supabase functions deploy coach-tick --no-verify-jwt
    ```
 6. **Cron del coach:** en Database → Extensions habilitá `pg_cron` y `pg_net`. Copiá `supabase/setup/cron.sql`, completá la URL de tu proyecto y el `CRON_SECRET`, y corrélo en el SQL Editor (los valores quedan cifrados en Vault, no en el repo).
