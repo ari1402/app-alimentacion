@@ -1,1 +1,0 @@
-var e=`claude-haiku-5-5`,t=`claude-opus-5-5`,n=class extends Error{code;constructor(e,t=`api`){super(e),this.code=t}};export{t as n,e as r,n as t};

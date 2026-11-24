@@ -32,13 +32,5 @@
       }, 6000);
     </script>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // GitHub Pages en modo "Deploy from a branch" sirve este archivo SIN compilar.
-      // La app compilada está en la carpeta app/: redirigimos ahí.
-      // (En el build, la etiqueta de arriba ya no apunta a src/main.tsx y esto no hace nada.)
-      if (/github\.io$/.test(location.hostname) && document.querySelector('script[src$="src/main.tsx"]')) {
-        location.replace(location.pathname.replace(/[^/]*$/, "") + "app/" + location.search + location.hash);
-      }
-    </script>
   </body>
 </html>

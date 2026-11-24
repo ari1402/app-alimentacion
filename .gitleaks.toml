@@ -1,9 +1,0 @@
-# La carpeta app/ y 404.html son la app compilada (código minificado de librerías):
-# se excluyen del escaneo para evitar falsos positivos. Nunca contienen keys
-# (el workflow que los genera verifica el build antes de commitear).
-[extend]
-useDefault = true
-
-[allowlist]
-description = "Build generado"
-paths = ['''^app/''', '''^404\.html$''']
