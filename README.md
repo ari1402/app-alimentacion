@@ -94,7 +94,11 @@ Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan
    supabase db push                 # aplica supabase/migrations (tablas + RLS + cardio/pasos)
    ```
 3. **Claves VAPID** (push): `npm run vapid` y guardá lo que imprime (no se escribe a disco).
-4. **Secretos de las funciones** (acá va la API key):
+4. **API key de Claude — dos opciones:**
+   - **Desde la app (lo más simple):** Ajustes → *API key de Claude* → pegarla → Guardar. La Edge Function `api-key` la valida contra Anthropic y la guarda **cifrada en Supabase Vault**. No queda en el código, en GitHub ni en el navegador, y la app nunca la vuelve a mostrar (solo los últimos 4 caracteres).
+   - **Como secreto del proyecto:** `ANTHROPIC_API_KEY` + `ALLOWED_EMAILS` en `supabase secrets` (paso siguiente). Si cargaste una key desde la app, se usa esa primero.
+
+   **Secretos de las funciones** (push y cron; la API key es opcional si la cargás desde la app):
    ```bash
    cp supabase/functions/.env.example supabase/functions/.env   # está en .gitignore
    # completá ANTHROPIC_API_KEY, ALLOWED_EMAILS, VAPID_*, CRON_SECRET
@@ -104,6 +108,7 @@ Sin variables `VITE_SUPABASE_*` la app corre en **modo local**: los datos quedan
    ```bash
    supabase functions deploy parse-meal
    supabase functions deploy coach
+   supabase functions deploy api-key
    supabase functions deploy coach-tick --no-verify-jwt
    ```
 6. **Cron del coach:** en Database → Extensions habilitá `pg_cron` y `pg_net`. Copiá `supabase/setup/cron.sql`, completá la URL de tu proyecto y el `CRON_SECRET`, y corrélo en el SQL Editor (los valores quedan cifrados en Vault, no en el repo).
@@ -125,7 +130,7 @@ La tabla de alimentos y las plantillas A1–A15 / C1–C10 vienen precargadas co
 
 | Dato | Dónde vive | ¿En GitHub? |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | `supabase secrets` (prod) / `.env.local` (dev, sin prefijo `VITE_`) | ❌ nunca |
+| `ANTHROPIC_API_KEY` | Supabase Vault (cargada desde Ajustes), o `supabase secrets`, o `.env.local` en dev (sin prefijo `VITE_`) | ❌ nunca |
 | `VAPID_PRIVATE_KEY`, `CRON_SECRET` | `supabase secrets` + Vault | ❌ nunca |
 | Service role key | La inyecta Supabase en las funciones | ❌ nunca |
 | URL + anon key de Supabase, VAPID pública | Variables `VITE_*` del hosting | Públicas por diseño (la seguridad es RLS) |

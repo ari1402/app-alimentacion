@@ -25,12 +25,15 @@ export function devApi(env: Record<string, string>): Plugin {
     name: "coach-dev-api",
     apply: "serve",
     configureServer(server) {
-      const key = env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
-      const client = key ? new Anthropic({ apiKey: key }) : null;
+      const envKey = env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith("/api/")) return next();
         if (req.method !== "POST") return send(res, 405, { error: "POST" });
-        if (!client) return send(res, 503, { error: "IA no configurada: agregá ANTHROPIC_API_KEY en .env.local", code: "unavailable" });
+        // Key cargada en la app (modo local, header) o la de .env.local. Nunca se loguea.
+        const headerKey = typeof req.headers["x-anthropic-key"] === "string" ? req.headers["x-anthropic-key"] : "";
+        const key = headerKey || envKey;
+        if (!key) return send(res, 503, { error: "IA no configurada: cargá tu API key en Ajustes → IA (o en .env.local)", code: "unavailable" });
+        const client = new Anthropic({ apiKey: key });
         try {
           const body = await readJson(req);
           if (req.url.startsWith("/api/parse-meal")) return send(res, 200, await parseMeal(client, body));
@@ -39,6 +42,9 @@ export function devApi(env: Record<string, string>): Plugin {
           }
           return send(res, 404, { error: "not found" });
         } catch (e) {
+          if (e instanceof Anthropic.AuthenticationError) {
+            return send(res, 503, { error: "La API key de Claude no es válida o fue revocada. Cargá una nueva en Ajustes → IA.", code: "unavailable" });
+          }
           const err = e as Error;
           const code = e instanceof AIError ? e.code : e instanceof Anthropic.APIError ? "api" : "api";
           console.error("[dev-api]", err.message);

@@ -3,6 +3,7 @@
 import type { Food, LearnedPortion, MealItem, Slot, UserConfig } from "@core";
 import type { CoachData } from "@core";
 import { supabase } from "./supabase";
+import { localKeyHeader } from "./apiKey";
 
 export class AIUnavailable extends Error {}
 
@@ -33,7 +34,7 @@ async function call<T>(fn: "parse-meal" | "coach", body: Record<string, unknown>
   // Modo local: solo existe con `npm run dev` y ANTHROPIC_API_KEY en .env.local
   let res: Response;
   try {
-    res = await fetch(`/api/${fn}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, ...localExtra() }) });
+    res = await fetch(`/api/${fn}`, { method: "POST", headers: { "content-type": "application/json", ...(await localKeyHeader()) }, body: JSON.stringify({ ...body, ...localExtra() }) });
   } catch {
     throw new AIUnavailable("IA no disponible sin conexión.");
   }

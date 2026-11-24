@@ -42,15 +42,7 @@ export async function requireUser(req: Request): Promise<AuthedUser> {
   });
   const { data, error } = await db.auth.getUser(auth.slice(7));
   if (error || !data.user) throw new HttpError(401, "Sesión inválida");
-  const allowed = (Deno.env.get("ALLOWED_EMAILS") ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  const email = data.user.email?.toLowerCase() ?? null;
-  // Falla cerrado: sin ALLOWED_EMAILS configurado nadie usa la IA (protege tus créditos).
-  if (!allowed.length) throw new HttpError(503, "Falta configurar ALLOWED_EMAILS en los secretos de Supabase");
-  if (!email || !allowed.includes(email)) throw new HttpError(403, "Usuario no autorizado para usar la IA");
-  return { id: data.user.id, email, db };
+  return { id: data.user.id, email: data.user.email?.toLowerCase() ?? null, db };
 }
 
 export class HttpError extends Error {
@@ -59,8 +51,31 @@ export class HttpError extends Error {
   }
 }
 
-export function anthropic(): Anthropic {
-  return new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+/** Key de la usuaria guardada desde la app (Vault, cifrada). Solo la lee el service role. */
+export async function userApiKey(userId: string): Promise<string | null> {
+  const { data, error } = await serviceClient().rpc("get_anthropic_key", { p_user: userId });
+  if (error) {
+    console.error("vault", error.message);
+    return null;
+  }
+  return typeof data === "string" && data ? data : null;
+}
+
+/**
+ * Cliente de Claude para esta usuaria:
+ * 1) su propia key cargada desde Ajustes (Vault), o
+ * 2) la key global del proyecto (`supabase secrets`), solo para emails en ALLOWED_EMAILS
+ *    (falla cerrado: si la lista está vacía, nadie usa la key global).
+ */
+export async function anthropicFor(user: AuthedUser): Promise<Anthropic> {
+  const own = await userApiKey(user.id);
+  if (own) return new Anthropic({ apiKey: own });
+  const global = Deno.env.get("ANTHROPIC_API_KEY");
+  if (global) {
+    const allowed = (Deno.env.get("ALLOWED_EMAILS") ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (allowed.length && user.email && allowed.includes(user.email)) return new Anthropic({ apiKey: global });
+  }
+  throw new AIError("Falta la API key de Claude: cargala en Ajustes → IA.", "unavailable");
 }
 
 export async function loadConfig(db: SupabaseClient, userId: string): Promise<UserConfig> {
@@ -98,7 +113,8 @@ export function handler(fn: (req: Request) => Promise<Response>) {
       return await fn(req);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
-      if (e instanceof AIError) return json({ error: e.message, code: e.code }, e.code === "budget" ? 429 : e.code === "invalid" ? 400 : 502);
+      if (e instanceof AIError) return json({ error: e.message, code: e.code }, e.code === "budget" ? 429 : e.code === "invalid" ? 400 : e.code === "unavailable" ? 412 : 502);
+      if (e instanceof Anthropic.AuthenticationError) return json({ error: "La API key de Claude no es válida o fue revocada. Cargá una nueva en Ajustes → IA.", code: "unavailable" }, 412);
       if (e instanceof Anthropic.RateLimitError) return json({ error: "La IA está saturada, probá en un minuto.", code: "api" }, 429);
       if (e instanceof Anthropic.APIError) {
         console.error("anthropic", e.status, e.message);

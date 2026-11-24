@@ -7,6 +7,7 @@ import { useStore } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { disablePush, enablePush, pushState, type PushState, testPush } from "../lib/push";
 import { Sheet } from "../components/Sheet";
+import { deleteKey, keyStatus, type KeyStatus, saveKey } from "../lib/apiKey";
 import { ItemsEditor } from "../components/ItemsEditor";
 import { IconBack } from "../components/Icons";
 
@@ -109,6 +110,55 @@ function parseFoodsCSV(text: string): Food[] {
     out.push({ id, name: c[0], portion_label: c[1], portion_g: Number(c[2]), kcal: Number(c[3]), p: Number(c[4]), c: Number(c[5]), f: Number(c[6]), aliases: c[7] ? c[7].split("|").map((s) => s.trim()) : [] });
   }
   return out;
+}
+
+function ApiKeyCard() {
+  const { toast, repo } = useStore();
+  const [status, setStatus] = useState<KeyStatus | null>(null);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { keyStatus().then(setStatus).catch(() => setStatus(null)); }, []);
+  const save = async () => {
+    setBusy(true);
+    try {
+      setStatus(await saveKey(value));
+      setValue("");
+      toast(repo.mode === "cloud" ? "Key validada y guardada cifrada en el servidor ✓" : "Key guardada en este dispositivo ✓");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card">
+      <h2>API key de Claude</h2>
+      {status?.configured ? (
+        <p className="small" style={{ marginTop: 0 }}>
+          ✓ Configurada {status.last4 ? <span className="kbd">sk-ant-…{status.last4}</span> : null}
+          {status.source === "servidor" ? " (key del servidor)" : status.source === "dispositivo" ? " (en este dispositivo)" : " (cifrada en tu Supabase)"}
+        </p>
+      ) : (
+        <p className="small muted" style={{ marginTop: 0 }}>Sin key: la IA (registro por texto/foto y coach) no funciona; todo lo demás sí.</p>
+      )}
+      <div className="row">
+        <input
+          type="password" autoComplete="off" spellCheck={false} placeholder={status?.configured ? "Reemplazar por otra key" : "sk-ant-…"}
+          value={value} onChange={(e) => setValue(e.target.value)} aria-label="API key de Claude"
+        />
+        <button className="btn primary" onClick={save} disabled={busy || !value.trim()}>{busy ? <span className="spinner" /> : "Guardar"}</button>
+      </div>
+      {status?.source === "app" || status?.source === "dispositivo" ? (
+        <button className="btn sm ghost danger" style={{ marginTop: 6 }} onClick={() => confirm("¿Borrar la API key?") && deleteKey().then(setStatus).catch((e) => toast(e.message, "error"))}>Borrar key</button>
+      ) : null}
+      <p className="faint" style={{ marginBottom: 0 }}>
+        {repo.mode === "cloud"
+          ? "Se valida con Anthropic y se guarda cifrada en Supabase Vault. No queda en el código, en GitHub ni en este navegador, y la app nunca la vuelve a mostrar."
+          : "Modo local: queda guardada solo en este dispositivo y se usa con el servidor de desarrollo. No queda en el código ni en GitHub."}
+        {" "}La sacás en console.anthropic.com → API Keys. Te conviene ponerle un límite de gasto mensual ahí.
+      </p>
+    </div>
+  );
 }
 
 export default function Settings() {
@@ -330,6 +380,8 @@ export default function Settings() {
           ))}
         </div>
       </div>
+
+      <ApiKeyCard />
 
       <div className="card">
         <h2>IA</h2>
