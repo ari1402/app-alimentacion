@@ -1,0 +1,23 @@
+# Configuración para el CLI de Supabase (`supabase start`, `supabase functions deploy`).
+project_id = "coach-nutricion"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+# App de un solo usuario: después de crear tu cuenta, dejá el registro cerrado.
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
+
+# parse-meal y coach validan el JWT del usuario (default).
+# coach-tick lo llama pg_cron con un secreto propio (x-cron-secret), por eso sin verify_jwt.
+[functions.coach-tick]
+verify_jwt = false

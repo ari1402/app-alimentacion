@@ -1,0 +1,29 @@
+# Dependencias y build
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# ── SECRETOS: nunca se suben ─────────────────────────────
+.env
+.env.*
+!.env.example
+*.local
+supabase/.env
+supabase/.env.*
+supabase/functions/.env
+supabase/functions/.env.*
+!supabase/functions/.env.example
+supabase/.temp/
+supabase/.branches/
+supabase/setup/*.filled.sql
+*.pem
+*.key
+vapid*.json
+
+# Editor / SO
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log

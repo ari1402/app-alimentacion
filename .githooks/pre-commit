@@ -1,0 +1,3 @@
+#!/bin/sh
+# Instalado por `npm install` (script "prepare": git config core.hooksPath .githooks)
+node scripts/check-secrets.mjs || exit 1
