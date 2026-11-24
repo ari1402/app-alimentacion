@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  bestSet, CARDIO_TYPES, type CardioIntensity, type CardioModality, detectPRs, estimateCardio, exerciseHistory, fmtShort,
+  addDays, bestSet, CARDIO_TYPES, type CardioIntensity, type CardioModality, detectPRs, estimateCardio, exerciseHistory, fmtShort,
   lastSetsByExercise, normalizeExercise, SEED_EXERCISES, targetsForDay, type Workout, type WorkoutExercise, type WorkoutType,
 } from "@core";
 import { useStore } from "../lib/store";
 import { LineChart } from "../components/LineChart";
-import { IconTrash } from "../components/Icons";
+import { IconCamera, IconMic, IconTrash } from "../components/Icons";
+import { AIUnavailable, fileToImagePayload, parseWorkoutAI } from "../lib/ai";
+import { useSpeech } from "../lib/speech";
 import { uid } from "../lib/uid";
 
 export default function Workouts() {
@@ -92,9 +94,10 @@ export default function Workouts() {
             <div className="grow">
               <div style={{ fontWeight: 550 }}>{fmtShort(wo.local_date)} · {wo.type}{wo.duration_min ? ` · ${wo.duration_min} min` : ""}</div>
               <div className="faint">
-                {wo.cardio
-                  ? `${CARDIO_TYPES[wo.cardio.modality]?.label ?? "Cardio"} ${wo.cardio.intensity} · ~${wo.cardio.net_kcal} kcal netas`
-                  : wo.exercises.map((e) => { const b = bestSet(e); return `${e.name}${b ? ` ${b.kg}×${b.reps}` : ""}`; }).join(" · ")}
+                {[
+                  ...wo.exercises.map((e) => { const b = bestSet(e); return `${e.name}${b ? ` ${b.kg}×${b.reps}` : ""}`; }),
+                  wo.cardio ? `${CARDIO_TYPES[wo.cardio.modality]?.label ?? "Cardio"} ${wo.cardio.minutes} min (~${wo.cardio.net_kcal} kcal netas)` : null,
+                ].filter(Boolean).join(" · ")}
               </div>
             </div>
             <Link className="btn sm ghost" to={`/entrenos/nuevo?id=${wo.id}`}>Editar</Link>
@@ -119,8 +122,17 @@ export function WorkoutNew() {
   const [intensity, setIntensity] = useState<CardioIntensity>(editing?.cardio?.intensity ?? "moderada");
   const [hr, setHr] = useState(editing?.cardio?.avg_hr ? String(editing.cardio.avg_hr) : "");
   const [deviceKcal, setDeviceKcal] = useState(editing?.cardio?.device_kcal ? String(editing.cardio.device_kcal) : "");
+  const [withCardio, setWithCardio] = useState(!!editing?.cardio && editing.type !== "cardio");
+  const [cardioMin, setCardioMin] = useState(editing?.cardio && editing.type !== "cardio" ? String(editing.cardio.minutes) : "");
   const weightKg = snap.projection.currentTrend ?? data.config.goal.start_kg;
-  const minutes = Number(duration) || 0;
+  const minutes = (type === "cardio" ? Number(duration) : Number(cardioMin)) || 0;
+  const hasCardio = type === "cardio" || withCardio;
+  // IA: contalo y lo cargo
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [assumptions, setAssumptions] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const speech = useSpeech((t) => setAiText((p) => (p ? `${p} ${t}` : t)));
   const est = estimateCardio({ modality, minutes, intensity, avg_hr: Number(hr) || null, device_kcal: Number(deviceKcal) || null }, weightKg, data.config.profile);
   const bonusPreview = Math.min(data.config.cardio.max_bonus, Math.round((est.net_kcal * data.config.cardio.eatback) / 10) * 10);
   const [date, setDate] = useState(editing?.local_date ?? snap.today);
@@ -146,10 +158,58 @@ export function WorkoutNew() {
   const setSet = (i: number, j: number, k: "reps" | "kg", v: number) =>
     setExs((x) => x.map((e, ii) => (ii !== i ? e : { ...e, sets: e.sets.map((s, jj) => (jj !== j ? s : { ...s, [k]: v })) })));
 
+  const interpret = async (image?: { media_type: string; data: string }) => {
+    if (!aiText.trim() && !image) return;
+    setAiBusy(true);
+    setAssumptions([]);
+    try {
+      const r = await parseWorkoutAI(
+        { text: aiText, image: image ?? null },
+        { known: catalog, last: [...last.values()].map((e) => `${e.name}: ${e.sets.map((x) => `${x.reps}×${x.kg}`).join(", ")}`) },
+      );
+      if (!r.exercises.length && !r.cardio.length) {
+        toast("No identifiqué ejercicios. Probá con más detalle (ej: sentadilla 3x8 con 80).", "error");
+        return;
+      }
+      if (r.exercises.length) {
+        setType("fuerza");
+        setExs((cur) => {
+          const map = new Map(cur.map((e) => [normalizeExercise(e.name), e]));
+          for (const e of r.exercises) map.set(normalizeExercise(e.name), e);
+          return [...map.values()];
+        });
+        if (r.duration_min) setDuration(String(r.duration_min));
+      }
+      const c = r.cardio[0];
+      if (c) {
+        setModality(c.modality);
+        setIntensity(c.intensity);
+        setHr(c.avg_hr ? String(c.avg_hr) : "");
+        setDeviceKcal(c.device_kcal ? String(c.device_kcal) : "");
+        if (r.exercises.length) {
+          setWithCardio(true);
+          setCardioMin(String(c.minutes));
+        } else {
+          setType("cardio");
+          setDuration(String(c.minutes));
+        }
+      }
+      const extra = r.cardio.slice(1).map((x) => `también ${x.minutes} min de ${CARDIO_TYPES[x.modality]?.label.toLowerCase() ?? x.modality}`);
+      if (r.notes || extra.length) setNotes((n) => [n, r.notes, ...extra].filter(Boolean).join(" · "));
+      if (r.day_offset) setDate(addDays(snap.today, r.day_offset));
+      setAssumptions(r.assumptions);
+      setAiText("");
+    } catch (e) {
+      toast(e instanceof AIUnavailable ? `${(e as Error).message.replace(/\.?\s*$/, ".")} Cargalo a mano abajo.` : (e as Error).message, "error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const save = async () => {
     const w: Workout = {
       id: editing?.id ?? uid(), local_date: date, type, exercises: type === "cardio" ? [] : exs.filter((e) => e.sets.length),
-      cardio: type === "cardio"
+      cardio: hasCardio && minutes > 0
         ? { modality, minutes, intensity, avg_hr: Number(hr) || null, device_kcal: Number(deviceKcal) || null, net_kcal: est.net_kcal, method: est.method }
         : null,
       duration_min: duration ? Number(duration) : null, notes: notes || null,
@@ -164,13 +224,34 @@ export function WorkoutNew() {
     }
     const prs = detectPRs(w, data.workouts);
     const wk = snap.workouts.done + (editing || snap.workouts.trainedToday || date !== snap.today ? 0 : 1);
-    toast(prs.length ? `Récord en ${prs.map((p) => `${p.exercise} (1RM est. ${p.e1rm} kg)`).join(", ")} ✓` : `Entreno guardado. Semana: ${wk}/${snap.workouts.goalMin}. Sumá 30–40 g de proteína en la próxima comida.`);
+    const t = w.cardio ? targetsForDay(data.config, date, [...data.workouts.filter((x) => x.id !== w.id), w]) : null;
+    const cardioMsg = t?.cardioBonusKcal ? ` Cardio: ~${est.net_kcal} kcal netas, objetivo del día ${t.targets.kcal} kcal (+${t.cardioBonusKcal}).` : "";
+    toast((prs.length ? `Récord en ${prs.map((p) => `${p.exercise} (1RM est. ${p.e1rm} kg)`).join(", ")} ✓` : `Entreno guardado. Semana: ${wk}/${snap.workouts.goalMin}. Sumá 30–40 g de proteína en la próxima comida.`) + cardioMsg);
     nav("/entrenos");
   };
 
   return (
     <div>
       <div className="header"><h1>{editing ? "Editar entreno" : "Nuevo entreno"}</h1></div>
+      {!editing && (
+        <div className="card">
+          <h2>Contalo y lo cargo</h2>
+          <textarea
+            value={aiText} onChange={(e) => setAiText(e.target.value)} aria-label="Contá tu entreno"
+            placeholder="ej: prensa 4x10 con 200, sentadilla 3x8 con 80 (la última con 85), jalón 3x12 con 50 y 25 min de cinta inclinada"
+          />
+          <div className="row" style={{ marginTop: 8 }}>
+            {speech.supported && (
+              <button className="btn" onClick={speech.listening ? speech.stop : speech.start} aria-label="Dictar">{speech.listening ? <span className="spinner" /> : <IconMic />}</button>
+            )}
+            <button className="btn" onClick={() => fileRef.current?.click()} aria-label="Foto de la libreta, pizarra o reloj"><IconCamera /></button>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { await interpret(await fileToImagePayload(f)); } catch { toast("No pude leer la foto.", "error"); } } }} />
+            <button className="btn primary grow" onClick={() => interpret()} disabled={aiBusy || !aiText.trim()}>{aiBusy ? <span className="spinner" /> : "Interpretar"}</button>
+          </div>
+          <p className="faint" style={{ marginBottom: 0 }}>También sirve una foto de tu libreta, la pizarra del gimnasio o el resumen del reloj. Revisás y corregís antes de guardar.</p>
+          {assumptions.length > 0 && <div className="banner" style={{ marginTop: 8 }}>Supuse: {assumptions.join(" · ")}</div>}
+        </div>
+      )}
       <div className="card">
         <div className="seg">
           {(["fuerza", "cardio", "otro"] as WorkoutType[]).map((t) => <button key={t} className={type === t ? "on" : ""} onClick={() => setType(t)}>{t}</button>)}
@@ -181,9 +262,17 @@ export function WorkoutNew() {
         </div>
       </div>
 
-      {type === "cardio" && (
+      {hasCardio && (
         <div className="card">
-          <h2>Cardio</h2>
+          <div className="row between">
+            <h2 style={{ margin: 0 }}>Cardio</h2>
+            {type !== "cardio" && <button className="btn sm ghost" onClick={() => setWithCardio(false)}>Quitar</button>}
+          </div>
+          {type !== "cardio" && (
+            <label className="field" style={{ margin: "8px 0" }}><span>Minutos de cardio</span>
+              <input type="number" inputMode="numeric" value={cardioMin} onChange={(e) => setCardioMin(e.target.value)} />
+            </label>
+          )}
           <div className="chips" style={{ flexWrap: "wrap" }}>
             {(Object.keys(CARDIO_TYPES) as CardioModality[]).map((m) => (
               <button key={m} className={`chip ${modality === m ? "on" : ""}`} onClick={() => setModality(m)}>{CARDIO_TYPES[m].label}</button>
@@ -243,8 +332,11 @@ export function WorkoutNew() {
         </div>
         <textarea style={{ marginTop: 8, minHeight: 60 }} placeholder="Notas (cómo te sentiste, dolor, etc.)" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
+      {type === "fuerza" && !withCardio && (
+        <button className="btn block ghost" style={{ marginBottom: 12 }} onClick={() => setWithCardio(true)}>+ Sumar cardio a esta sesión</button>
+      )}
       {type === "cardio" && <textarea style={{ marginBottom: 12, minHeight: 60 }} placeholder="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} />}
-      <button className="btn primary block" onClick={save} disabled={(type === "fuerza" && !exs.length) || (type === "cardio" && minutes <= 0)}>Guardar {type === "cardio" ? "cardio" : "entreno"}</button>
+      <button className="btn primary block" onClick={save} disabled={(type === "fuerza" && !exs.length) || (hasCardio && minutes <= 0)}>Guardar {type === "cardio" ? "cardio" : "entreno"}</button>
     </div>
   );
 }

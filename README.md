@@ -17,7 +17,7 @@ App personal (un solo usuario) que funciona como coach: registra comidas y entre
 | C. Estado del día | ✅ | Anillos con rango aceptable, tarjeta del coach según la hora, semana (margen, días en rango), tendencia y fecha estimada. |
 | D. Coach proactivo | ✅ | Mañana, recordatorios por comida (antes de la decisión), pre/post entreno, proyección de la tarde, cierre de noche con un ajuste concreto, cierre semanal, medidas cada 3 semanas. |
 | E. Notificaciones | ✅ | Web Push desde el servidor (llegan con la app cerrada), cada 15 min vía pg_cron. Horas de silencio, dedupe, máximo 2 juntas. |
-| F. Entrenos | ✅ | Sesiones, series × reps × kg precargadas con tus últimas cargas, 1RM estimado, récords, consistencia semanal con objetivo progresivo al retomar. |
+| F. Entrenos | ✅ | **Contalo y lo cargo:** texto, voz o foto (libreta, pizarra, reloj) → series × reps × kg + cardio, para revisar antes de guardar. También carga manual precargada con tus últimas cargas. Fuerza + cardio en la misma sesión, 1RM estimado, récords, consistencia semanal con objetivo progresivo al retomar. |
 | G. Seguimiento | ✅ | Peso con media móvil exponencial, gráfico con banda objetivo, medidas, adherencia de 8 semanas, hitos. |
 | H. Base de conocimiento | ✅ | Tabla de alimentos editable, plantillas A1–A15 / C1–C10 / desayunos / meriendas, importación CSV/JSON. |
 | Negociación | ✅ | "¿Puedo comer X?" → opciones con trade-off concreto (hoy / semana / aceptarlo) e impacto en la fecha. "¿Muevo el entreno?" → cómo queda la semana. Nunca compensación punitiva. |
@@ -130,6 +130,7 @@ Paso a paso manual (lo mismo que hace el script):
    supabase functions deploy coach
    supabase functions deploy api-key
    supabase functions deploy recipe
+   supabase functions deploy parse-workout
    supabase functions deploy coach-tick --no-verify-jwt
    ```
 6. **Cron del coach:** en Database → Extensions habilitá `pg_cron` y `pg_net`. Copiá `supabase/setup/cron.sql`, completá la URL de tu proyecto y el `CRON_SECRET`, y corrélo en el SQL Editor (los valores quedan cifrados en Vault, no en el repo).

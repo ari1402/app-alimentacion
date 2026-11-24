@@ -9,28 +9,9 @@ import { AIUnavailable, fileToImagePayload, parseMealAI } from "../lib/ai";
 import { ItemsEditor } from "../components/ItemsEditor";
 import { IconCamera, IconMic, IconStar } from "../components/Icons";
 import { uid } from "../lib/uid";
+import { useSpeech } from "../lib/speech";
 
 type Mode = "texto" | "lista" | "rapido";
-
-function useSpeech(onText: (t: string) => void) {
-  const [listening, setListening] = useState(false);
-  const recRef = useRef<any>(null);
-  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  const start = () => {
-    if (!SR) return;
-    const rec = new SR();
-    rec.lang = "es-AR";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => onText(e.results[0][0].transcript);
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recRef.current = rec;
-    setListening(true);
-    rec.start();
-  };
-  return { supported: !!SR, listening, start, stop: () => recRef.current?.stop() };
-}
 
 function searchFoods(foods: Food[], q: string): Food[] {
   const n = normalizePhrase(q);

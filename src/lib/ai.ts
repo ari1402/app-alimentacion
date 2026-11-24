@@ -3,7 +3,7 @@
 // - Modo local con key cargada en Ajustes: la key está solo en este dispositivo
 //   (IndexedDB) y la app llama a api.anthropic.com directo por HTTPS.
 // - Modo local sin key: servidor de desarrollo (`npm run dev` + .env.local).
-import { localDate, mergeConfig, type Food, type LearnedPortion, type Macros, type MealItem, type Recipe, type Slot, type UserConfig } from "@core";
+import { type CardioIntensity, type CardioModality, localDate, mergeConfig, type Food, type LearnedPortion, type Macros, type MealItem, type Recipe, type Slot, type UserConfig } from "@core";
 import type { CoachData } from "@core";
 import { supabase } from "./supabase";
 import { getLocalKey } from "./apiKey";
@@ -22,7 +22,7 @@ export interface CoachReply {
   proposals: { slot: Slot; items: MealItem[]; totals: MealItem }[];
 }
 
-type Fn = "parse-meal" | "coach" | "recipe";
+type Fn = "parse-meal" | "parse-workout" | "coach" | "recipe";
 
 async function call<T>(fn: Fn, body: Record<string, unknown>, localExtra: () => Record<string, unknown>): Promise<T> {
   if (supabase) {
@@ -75,6 +75,10 @@ async function direct<T>(fn: Fn, key: string, body: Record<string, any>): Promis
     if (fn === "parse-meal") {
       const { parseMeal } = await import("@ai/parseMeal.ts");
       return (await parseMeal(client, body as any)) as T;
+    }
+    if (fn === "parse-workout") {
+      const { parseWorkout } = await import("@ai/parseWorkout.ts");
+      return (await parseWorkout(client, body as any)) as T;
     }
     if (fn === "recipe") {
       const { generateRecipe } = await import("@ai/recipe.ts");
@@ -140,4 +144,20 @@ export interface RecipeReply {
 
 export function recipeAI(req: RecipeRequestUI, local: { foods: Food[] }): Promise<RecipeReply> {
   return call("recipe", req as unknown as Record<string, unknown>, () => local);
+}
+
+export interface WorkoutParseReply {
+  exercises: { name: string; sets: { reps: number; kg: number }[] }[];
+  cardio: { modality: CardioModality; minutes: number; intensity: CardioIntensity; avg_hr: number | null; device_kcal: number | null }[];
+  duration_min: number | null;
+  day_offset: number;
+  notes: string | null;
+  assumptions: string[];
+}
+
+export function parseWorkoutAI(
+  req: { text?: string; image?: { media_type: string; data: string } | null },
+  local: { known: string[]; last: string[] },
+): Promise<WorkoutParseReply> {
+  return call("parse-workout", req as unknown as Record<string, unknown>, () => local);
 }
