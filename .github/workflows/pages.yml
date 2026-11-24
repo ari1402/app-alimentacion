@@ -57,5 +57,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Si Pages está en "Deploy from a branch" este paso no puede publicar; la app igual
+      # queda disponible en /app/ gracias a build-app-folder.yml. No marcamos error.
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true

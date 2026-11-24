@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Coach</title>
+    <meta name="description" content="Coach personal de nutrición y entrenamiento" />
+    <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Coach" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="manifest" href="/app-alimentacion/app/manifest.webmanifest" />
+    <link rel="icon" href="/app-alimentacion/app/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/app-alimentacion/app/icon-180.png" />
+    <script type="module" crossorigin src="/app-alimentacion/app/assets/index-C6bkaTi8.js"></script>
+    <link rel="modulepreload" crossorigin href="/app-alimentacion/app/assets/portions-lNdVZn3P.js">
+    <link rel="modulepreload" crossorigin href="/app-alimentacion/app/assets/snapshot-DtVXbWUW.js">
+    <link rel="modulepreload" crossorigin href="/app-alimentacion/app/assets/store-CU1bKuDU.js">
+    <link rel="stylesheet" crossorigin href="/app-alimentacion/app/assets/index-YdUu4M_C.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Si la app no arranca (por ej. GitHub Pages sirviendo el código sin compilar), explicar qué hacer en vez de dejar la pantalla en blanco -->
+    <div id="boot-fail" hidden style="font: 16px/1.5 system-ui, sans-serif; max-width: 520px; margin: 15vh auto; padding: 0 16px; color: #52514e">
+      <h1 style="font-size: 20px; color: #0b0b0b">La app no cargó</h1>
+      <p>Recargá la página. Si estás viendo esto en GitHub Pages, revisá en el repositorio:
+        <strong>Settings → Pages → Build and deployment → Source: “GitHub Actions”</strong>,
+        y después <strong>Actions → “Publicar en GitHub Pages” → Run workflow</strong>.</p>
+    </div>
+    <script>
+      setTimeout(function () {
+        var r = document.getElementById("root");
+        if (r && !r.hasChildNodes()) document.getElementById("boot-fail").hidden = false;
+      }, 6000);
+    </script>
+    <script>
+      // GitHub Pages en modo "Deploy from a branch" sirve este archivo SIN compilar.
+      // La app compilada está en la carpeta app/: redirigimos ahí.
+      // (En el build, la etiqueta de arriba ya no apunta a src/main.tsx y esto no hace nada.)
+      if (/github\.io$/.test(location.hostname) && document.querySelector('script[src$="src/main.tsx"]')) {
+        location.replace(location.pathname.replace(/[^/]*$/, "") + "app/" + location.search + location.hash);
+      }
+    </script>
+  </body>
+</html>
