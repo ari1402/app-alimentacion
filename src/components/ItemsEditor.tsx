@@ -3,7 +3,14 @@ import { rescaleItem, totalsOf } from "@core";
 import { IconTrash } from "./Icons";
 
 /** Lista editable de ítems: la IA puede errar cantidades, Ari corrige antes de confirmar. */
-export function ItemsEditor({ items, foods, onChange }: { items: MealItem[]; foods: Food[]; onChange: (items: MealItem[]) => void }) {
+export function ItemsEditor({ items, foods, onChange, onLookup, lookingUp }: {
+  items: MealItem[];
+  foods: Food[];
+  onChange: (items: MealItem[]) => void;
+  /** Buscar macros reales de un ítem estimado (productos de marca) */
+  onLookup?: (index: number) => void;
+  lookingUp?: number | null;
+}) {
   const byId = new Map(foods.map((f) => [f.id, f]));
   const t = totalsOf(items);
   return (
@@ -15,6 +22,11 @@ export function ItemsEditor({ items, foods, onChange }: { items: MealItem[]; foo
               {it.name} {it.estimated && <span className="tag" title="No está en tu tabla: macros estimados">estimado</span>}
             </div>
             <div className="faint num">{Math.round(it.kcal)} kcal · P {Math.round(it.p)} · C {Math.round(it.c)} · G {Math.round(it.f)}</div>
+            {it.estimated && onLookup && (
+              <button className="btn sm ghost" style={{ marginTop: 4, minHeight: 30, padding: "2px 8px" }} disabled={lookingUp != null} onClick={() => onLookup(i)}>
+                {lookingUp === i ? <><span className="spinner" /> Buscando la etiqueta…</> : "🔎 Buscar macros reales"}
+              </button>
+            )}
           </div>
           <label className="row" style={{ gap: 4 }}>
             <input

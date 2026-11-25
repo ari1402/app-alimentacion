@@ -57,6 +57,15 @@ App personal (un solo usuario) que funciona como coach: registra comidas y entre
 - **Lista de compras:** elegís cuántas tandas de cada receta y arma la lista por categoría, con equivalencia a **crudo/seco** para comprar (ej. 900 g de pollo cocido ≈ 1,25 kg crudo). Se copia con un toque.
 - Registrar → Rápido muestra las recetas que mejor entran; el coach con IA también las conoce.
 
+### Productos de marca con macros reales
+
+Si nombrás un producto de marca ("barrita proteica Integra", "yogur Ser proteína"), la app no estima: busca la **etiqueta real**.
+1. **Open Food Facts** (base pública de productos escaneados, prioriza los vendidos en Argentina).
+2. Si no está, **búsqueda web** de Claude (sitio de la marca, Carrefour, Coto, Jumbo, Día…).
+3. Lo guarda en tu tabla de alimentos con marca y fuente: la próxima vez lo reconoce directo, sin buscar.
+
+Funciona desde el **coach** ("me comí una barrita Integra de chocolate" → busca, guarda y te propone registrarla) y desde **Registrar**: los ítems estimados tienen el botón **🔎 Buscar macros reales**. Si tu organización de Anthropic no tiene habilitada la búsqueda web, sigue solo con Open Food Facts.
+
 ### Apple Salud / Apple Watch (sueño, pasos, peso, FC en reposo)
 
 Apple no permite que una web app lea Salud. El puente es un **Atajo de iPhone** (instrucciones paso a paso en Ajustes → Apple Salud):
@@ -141,6 +150,7 @@ Paso a paso manual (lo mismo que hace el script):
    supabase functions deploy recipe
    supabase functions deploy parse-workout
    supabase functions deploy health-ingest --no-verify-jwt
+   supabase functions deploy lookup-food
    supabase functions deploy coach-tick --no-verify-jwt
    ```
 6. **Cron del coach:** en Database → Extensions habilitá `pg_cron` y `pg_net`. Copiá `supabase/setup/cron.sql`, completá la URL de tu proyecto y el `CRON_SECRET`, y corrélo en el SQL Editor (los valores quedan cifrados en Vault, no en el repo).

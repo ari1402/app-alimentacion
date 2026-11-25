@@ -51,6 +51,7 @@ Reglas:
 - Cantidades: "medio" = 0.5 porción, "un/una" = 1 porción de la tabla salvo porción aprendida, "un plato" de pasta/arroz cocido ≈ 200 g, "una taza" de leche ≈ 200 ml, "un puñado" ≈ 15 g. Si no dice cantidad, asumí la porción de referencia.
 - Preparaciones compuestas (ej. "café con leche proteica") pueden existir como un ítem de la tabla; si no, descomponé en ingredientes.
 - Si algo no está en la tabla, estimá con valores estándar (food_id null, estimated true). Las kcal tienen que ser coherentes con 4·P + 4·C + 9·G.
+- Si menciona una MARCA (ej. "barrita Integra", "yogur Ser"), incluí la marca en name ("Barrita proteica Integra") aunque estimes: la app después busca los macros reales de la etiqueta. Productos de marca de la tabla (food_id que empieza con "m-") tienen prioridad.
 - No juzgues lo que comió ni agregues comentarios. Solo datos.
 - slot: inferilo del texto si lo menciona ("en el almuerzo"); si no, null.
 - clarification: solo si es imposible estimar algo importante; en general, estimá y dejá que ella corrija.`;

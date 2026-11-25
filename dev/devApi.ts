@@ -8,6 +8,7 @@ import { parseMeal } from "../supabase/functions/_shared/ai/parseMeal.ts";
 import { runCoach } from "../supabase/functions/_shared/ai/coach.ts";
 import { generateRecipe } from "../supabase/functions/_shared/ai/recipe.ts";
 import { parseWorkout } from "../supabase/functions/_shared/ai/parseWorkout.ts";
+import { lookupFood } from "../supabase/functions/_shared/ai/productSearch.ts";
 import { AIError } from "../supabase/functions/_shared/ai/models.ts";
 
 async function readJson(req: IncomingMessage): Promise<any> {
@@ -39,6 +40,7 @@ export function devApi(env: Record<string, string>): Plugin {
         try {
           const body = await readJson(req);
           if (req.url.startsWith("/api/parse-meal")) return send(res, 200, await parseMeal(client, body));
+          if (req.url.startsWith("/api/lookup-food")) return send(res, 200, await lookupFood(client, body));
           if (req.url.startsWith("/api/parse-workout")) return send(res, 200, await parseWorkout(client, body));
           if (req.url.startsWith("/api/recipe")) return send(res, 200, await generateRecipe(client, body));
           if (req.url.startsWith("/api/coach")) {

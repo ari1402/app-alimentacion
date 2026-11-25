@@ -69,6 +69,8 @@ export default function Coach() {
         { mode, messages: history },
         { cfg: data.config, data: { meals: data.meals, workouts: data.workouts, metrics: data.metrics, templates: data.templates, events: data.events }, foods: data.foods, recipes: data.recipes },
       );
+      for (const f of r.newFoods ?? []) await actions.saveFood(f);
+      if (r.newFoods?.length) toast(`Guardé en tu tabla: ${r.newFoods.map((f) => f.name).join(", ")}`);
       const am: ChatMessage = { id: uid(), created_at: new Date().toISOString(), role: "assistant", content: r.text };
       await actions.addChat(am);
       if (r.proposals?.length) setProposals((p) => ({ ...p, [am.id]: r.proposals }));

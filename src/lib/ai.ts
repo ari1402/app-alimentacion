@@ -20,9 +20,10 @@ export interface ParseResult {
 export interface CoachReply {
   text: string;
   proposals: { slot: Slot; items: MealItem[]; totals: MealItem }[];
+  newFoods?: Food[];
 }
 
-type Fn = "parse-meal" | "parse-workout" | "coach" | "recipe";
+type Fn = "parse-meal" | "parse-workout" | "coach" | "recipe" | "lookup-food";
 
 async function call<T>(fn: Fn, body: Record<string, unknown>, localExtra: () => Record<string, unknown>): Promise<T> {
   if (supabase) {
@@ -75,6 +76,10 @@ async function direct<T>(fn: Fn, key: string, body: Record<string, any>): Promis
     if (fn === "parse-meal") {
       const { parseMeal } = await import("@ai/parseMeal.ts");
       return (await parseMeal(client, body as any)) as T;
+    }
+    if (fn === "lookup-food") {
+      const { lookupFood } = await import("@ai/productSearch.ts");
+      return (await lookupFood(client, body as any)) as T;
     }
     if (fn === "parse-workout") {
       const { parseWorkout } = await import("@ai/parseWorkout.ts");
@@ -160,4 +165,14 @@ export function parseWorkoutAI(
   local: { known: string[]; last: string[] },
 ): Promise<WorkoutParseReply> {
   return call("parse-workout", req as unknown as Record<string, unknown>, () => local);
+}
+
+export interface LookupReply {
+  food: Food | null;
+  message: string;
+}
+
+/** Macros reales de un producto de marca (Open Food Facts + web) */
+export function lookupFoodAI(query: string): Promise<LookupReply> {
+  return call("lookup-food", { query }, () => ({}));
 }

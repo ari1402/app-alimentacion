@@ -5,7 +5,7 @@ import {
   servingItems, type Slot, SLOTS, slotForTime, slotLabel, totalsOf,
 } from "@core";
 import { useStore } from "../lib/store";
-import { AIUnavailable, fileToImagePayload, parseMealAI } from "../lib/ai";
+import { AIUnavailable, fileToImagePayload, lookupFoodAI, parseMealAI } from "../lib/ai";
 import { ItemsEditor } from "../components/ItemsEditor";
 import { IconCamera, IconMic, IconStar } from "../components/Icons";
 import { uid } from "../lib/uid";
@@ -19,8 +19,10 @@ function searchFoods(foods: Food[], q: string): Food[] {
   const terms = n.split(" ");
   return foods
     .map((f) => {
-      const hay = normalizePhrase([f.name, ...(f.aliases ?? [])].join(" "));
-      const s = terms.reduce((a, t) => a + (hay.includes(t) ? (hay.startsWith(t) ? 2 : 1) : 0), 0);
+      const hay = normalizePhrase([f.name, f.brand ?? "", ...(f.aliases ?? [])].join(" "));
+      const words = new Set(hay.split(" "));
+      // palabra completa (ej. la marca "integra") pesa más que un pedazo ("integral")
+      const s = terms.reduce((a, t) => a + (hay.includes(t) ? (words.has(t) ? 3 : hay.startsWith(t) ? 2 : 1) : 0), 0);
       return { f, s: s + (f.favorite ? 0.5 : 0) };
     })
     .filter((x) => x.s >= terms.length)
@@ -45,6 +47,27 @@ export default function Log() {
   const [clarify, setClarify] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [recipeUses, setRecipeUses] = useState<Record<string, number>>({});
+  const [lookingUp, setLookingUp] = useState<number | null>(null);
+
+  /** Producto de marca estimado → buscar la etiqueta real y reemplazar el ítem */
+  const lookup = async (i: number) => {
+    const it = items[i];
+    setLookingUp(i);
+    try {
+      const r = await lookupFoodAI([it.name, it.phrase].filter(Boolean).join(" — "));
+      if (!r.food) return toast(r.message || "No encontré la etiqueta de ese producto.", "error");
+      await actions.saveFood(r.food);
+      // "una barrita" → 1 porción del producto; si no, se mantienen los gramos
+      const oneUnit = /\b(un|una|1)\b/i.test(it.phrase ?? "") && /unidad|barrita|pote|botella|lata|sobre|paquete|\(/i.test(r.food.portion_label);
+      const grams = oneUnit ? r.food.portion_g : it.grams;
+      setItems((prev) => prev.map((x, j) => (j === i ? itemFromFood(r.food!, grams, x.phrase) : x)));
+      toast(`${r.message} Guardado en tu tabla.`);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setLookingUp(null);
+    }
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const speech = useSpeech((t) => setText((p) => (p ? `${p} ${t}` : t)));
 
@@ -266,7 +289,7 @@ export default function Log() {
       {items.length > 0 && (
         <div className="card">
           <h2>Revisá y confirmá</h2>
-          <ItemsEditor items={items} foods={data.foods} onChange={setItems} />
+          <ItemsEditor items={items} foods={data.foods} onChange={setItems} onLookup={lookup} lookingUp={lookingUp} />
           <div className="faint" style={{ marginTop: 8 }}>
             Después de esto: {Math.round(after.kcal)} / {dayState.target.kcal} kcal · {Math.round(after.p)} / {dayState.ranges.pMin} g P
             {draftTotals.c > data.config.carb_rule_threshold ? ` · más de ${data.config.carb_rule_threshold} g de carbos: la próxima, baja en carbos` : ""}

@@ -58,6 +58,7 @@ function FoodEditor({ food, onClose }: { food: Food | null; onClose: () => void 
         <Num label="G" value={f.f} step={0.1} onChange={(v) => setF({ ...f, f: v })} />
       </div>
       {f.kcal > 0 && Math.abs(k - f.kcal) / f.kcal > 0.15 && <div className="banner">Ojo: 4·P + 4·C + 9·G = {Math.round(k)} kcal, distinto de {f.kcal}.</div>}
+      {(f.brand || f.source) && <div className="faint">{f.brand ? `Marca: ${f.brand}. ` : ""}{f.source ? `Fuente: ${f.source}` : ""}</div>}
       <div className="row">
         {food && <button className="btn danger" onClick={async () => { await actions.deleteFood(food.id); onClose(); }}>Borrar</button>}
         <button className="btn primary grow" onClick={save}>Guardar</button>
@@ -467,7 +468,7 @@ export default function Settings() {
         <div style={{ maxHeight: 300, overflow: "auto", marginTop: 6 }}>
           {foods.map((f) => (
             <div className="list-item small" key={f.id} onClick={() => setFoodEdit(f)} style={{ cursor: "pointer" }}>
-              <span className="grow">{f.name} <span className="faint">· {f.portion_label}</span></span>
+              <span className="grow">{f.name} <span className="faint">· {f.portion_label}{f.source ? " · etiqueta ✓" : ""}</span></span>
               <span className="faint num">{f.kcal} kcal · P {f.p}</span>
             </div>
           ))}

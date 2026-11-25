@@ -22,6 +22,10 @@ export interface Food extends Macros {
   portion_g: number;
   category?: string;
   favorite?: boolean;
+  /** Marca (productos envasados) */
+  brand?: string | null;
+  /** De dónde salen los macros (tabla del proyecto, Open Food Facts, web de la marca…) */
+  source?: string | null;
 }
 
 export interface MealItem extends Macros {

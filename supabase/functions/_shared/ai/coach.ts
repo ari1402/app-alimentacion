@@ -13,6 +13,7 @@ import { itemFromFood, rankTemplates, totalsOf } from "../core/macros.ts";
 import { addDays } from "../core/dates.ts";
 import { normalizePhrase } from "../core/portions.ts";
 import { AIError, type AIUsage, DEFAULT_MODEL_COACH } from "./models.ts";
+import { foodFromTool, PRODUCT_RULES, PRODUCT_TOOLS, searchOpenFoodFacts, WEB_SEARCH_TOOL } from "./productSearch.ts";
 
 export type CoachMode = "chat" | "analisis_dia" | "analisis_semana";
 
@@ -26,6 +27,8 @@ export interface CoachInput {
   recipes?: Recipe[];
   now?: Date;
   model?: string;
+  /** fetch para Open Food Facts (inyectable en tests) */
+  fetchImpl?: typeof fetch;
 }
 
 export interface MealProposal {
@@ -37,6 +40,8 @@ export interface MealProposal {
 export interface CoachOutput {
   text: string;
   proposals: MealProposal[];
+  /** Productos de marca encontrados (para guardar en la tabla de alimentos) */
+  newFoods: Food[];
   usage: AIUsage;
   toolsUsed: string[];
 }
@@ -81,6 +86,8 @@ EVIDENCIA (basá tus recomendaciones en esto; citá autor y año en una línea c
 
 SALUD
 - No das indicaciones médicas ni de medicación. Si aparecen señales de restricción excesiva, atracones o malestar con la comida, respondé con cuidado, sin números, y sugerí hablarlo con un profesional de confianza.
+
+${PRODUCT_RULES}
 
 Al final de los mensajes vas a recibir, como mensaje de sistema, el ESTADO ACTUAL calculado por la app. Es la fuente de verdad de los números.`;
 
@@ -238,9 +245,20 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
   const toolsUsed: string[] = [];
   const foodsById = new Map(input.foods.map((f) => [f.id, f]));
 
-  function execTool(name: string, args: Record<string, unknown>): unknown {
+  const newFoods: Food[] = [];
+  async function execTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     toolsUsed.push(name);
     switch (name) {
+      case "buscar_producto": {
+        const r = await searchOpenFoodFacts(String(args.consulta ?? ""), input.fetchImpl);
+        return r.length ? r : "Sin resultados en Open Food Facts. Probá con web_search.";
+      }
+      case "guardar_alimento": {
+        const f = foodFromTool(args);
+        foodsById.set(f.id, f);
+        newFoods.push(f);
+        return { ok: true, food_id: f.id, guardado: `${f.name} — ${f.portion_label}: ${f.kcal} kcal, P ${f.p}, C ${f.c}, G ${f.f}`, nota: "Usá este food_id en proponer_registro." };
+      }
       case "simular_comida_extra": {
         const extra = { kcal: Number(args.kcal) || 0, p: Number(args.p) || 0, c: Number(args.c) || 0, f: Number(args.f) || 0 };
         return { descripcion: args.descripcion, ...negotiateExtra(extra, input.data.meals, input.cfg, snap.today, snap.projection.tdee.kcal, input.data.workouts) };
@@ -307,18 +325,30 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
   const effort = input.mode === "chat" ? "low" : "medium";
   let finalText = "";
 
-  for (let i = 0; i < 6; i++) {
-    const response = await client.beta.messages.create({
-      model: usage.model,
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      cache_control: { type: "ephemeral" },
-      output_config: { effort },
-      system: SYSTEM,
-      tools: tools(),
-      messages,
-    });
+  let toolList: Anthropic.Beta.BetaToolUnion[] = [...tools(), ...PRODUCT_TOOLS, WEB_SEARCH_TOOL];
+  for (let i = 0; i < 8; i++) {
+    let response: Anthropic.Beta.BetaMessage;
+    try {
+      response = await client.beta.messages.create({
+        model: usage.model,
+        max_tokens: 16000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        cache_control: { type: "ephemeral" },
+        output_config: { effort },
+        system: SYSTEM,
+        tools: toolList,
+        messages,
+      });
+    } catch (e) {
+      // Organización sin búsqueda web habilitada: seguir con Open Food Facts
+      if (e instanceof Anthropic.BadRequestError && toolList.includes(WEB_SEARCH_TOOL) && /web_search|tool/i.test(e.message)) {
+        toolList = toolList.filter((t) => t !== WEB_SEARCH_TOOL);
+        i--;
+        continue;
+      }
+      throw e;
+    }
     usage.model = response.model;
     usage.input_tokens += response.usage.input_tokens;
     usage.output_tokens += response.usage.output_tokens;
@@ -328,7 +358,7 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
     const text = response.content
       .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
       .map((b) => b.text)
-      .join("\n")
+      .join("") // con búsqueda web el texto llega partido en bloques con citas
       .trim();
     if (text) finalText = text;
 
@@ -340,17 +370,17 @@ export async function runCoach(client: Anthropic, input: CoachInput): Promise<Co
 
     const toolUses = response.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
     messages.push({ role: "assistant", content: response.content });
-    const results: Anthropic.Beta.BetaToolResultBlockParam[] = toolUses.map((tu) => {
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(toolUses.map(async (tu): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
       try {
-        const out = execTool(tu.name, (tu.input ?? {}) as Record<string, unknown>);
+        const out = await execTool(tu.name, (tu.input ?? {}) as Record<string, unknown>);
         return { type: "tool_result", tool_use_id: tu.id, content: typeof out === "string" ? out : JSON.stringify(out) };
       } catch (e) {
         return { type: "tool_result", tool_use_id: tu.id, content: String((e as Error).message), is_error: true };
       }
-    });
+    }));
     messages.push({ role: "user", content: results });
   }
 
   if (!finalText) throw new AIError("El coach no respondió. Probá de nuevo.", "api");
-  return { text: finalText, proposals, usage, toolsUsed };
+  return { text: finalText, proposals, newFoods, usage, toolsUsed };
 }
